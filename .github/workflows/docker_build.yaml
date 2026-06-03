@@ -62,7 +62,7 @@ jobs:
         with:
           context: .
           file: Dockerfile.${{ matrix.image }}
-          push: true
+          push: ${{ github.ref == 'refs/heads/main' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=registry,ref=ghcr.io/toymaninteractive/toygine2.${{ matrix.image }}.toolchain:buildcache
