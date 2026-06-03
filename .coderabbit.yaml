@@ -1,0 +1,32 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+language: "en-US"
+early_access: true
+enable_free_tier: true
+reviews:
+  profile: "assertive"
+  request_changes_workflow: true
+  high_level_summary: true
+  high_level_summary_placeholder: "@coderabbitai summary"
+  high_level_summary_in_walkthrough: false
+  auto_title_placeholder: "@coderabbitai"
+  review_status: true
+  commit_status: true
+  collapse_walkthrough: false
+  changed_files_summary: true
+  sequence_diagrams: true
+  assess_linked_issues: true
+  related_issues: true
+  related_prs: false
+  suggested_labels: true
+  auto_apply_labels: true
+  suggested_reviewers: true
+  auto_assign_reviewers: true
+  poem: false
+  abort_on_close: true
+  disable_cache: false
+  auto_review:
+    enabled: false
+    auto_incremental_review: false
+    drafts: false
+chat:
+  auto_reply: true

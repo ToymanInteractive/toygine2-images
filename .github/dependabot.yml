@@ -1,0 +1,41 @@
+version: 2
+updates:
+  # Maintain dependencies for GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "daily"
+
+    assignees:
+      - "dependabot"
+      - "dkrutskikh"
+
+    commit-message:
+      prefix: "chore(ci): "
+
+    groups:
+      github-actions:
+        patterns:
+          - "actions/*"
+
+      docker-actions:
+        patterns:
+          - "docker/*"
+
+  # Maintain base images in Dockerfiles
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+
+    assignees:
+      - "dependabot"
+      - "dkrutskikh"
+
+    commit-message:
+      prefix: "chore(ci): "
+
+    groups:
+      devkitpro:
+        patterns:
+          - "devkitpro/*"
