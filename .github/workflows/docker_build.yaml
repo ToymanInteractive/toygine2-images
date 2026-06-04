@@ -57,12 +57,22 @@ jobs:
             type=raw,value=latest
             type=raw,value={{date 'YYYYMMDD'}}
 
-      - name: Build and push
+      - name: Build only
+        if: ${{ github.ref != 'refs/heads/main' }}
         uses: docker/build-push-action@v7.2.0
         with:
           context: .
           file: Dockerfile.${{ matrix.image }}
-          push: ${{ github.ref == 'refs/heads/main' }}
+          push: false
+          cache-from: type=registry,ref=ghcr.io/toymaninteractive/toygine2.${{ matrix.image }}.toolchain:buildcache
+
+      - name: Build and push
+        if: ${{ github.ref == 'refs/heads/main' }}
+        uses: docker/build-push-action@v7.2.0
+        with:
+          context: .
+          file: Dockerfile.${{ matrix.image }}
+          push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=registry,ref=ghcr.io/toymaninteractive/toygine2.${{ matrix.image }}.toolchain:buildcache
