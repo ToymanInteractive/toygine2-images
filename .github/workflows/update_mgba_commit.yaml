@@ -11,6 +11,9 @@ permissions:
 
 jobs:
   update:
+    concurrency:
+      group: update-mgba-commit
+      cancel-in-progress: false
     name: Bump mGBA commit
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -50,7 +53,14 @@ jobs:
         env:
           LATEST: ${{ steps.mgba.outputs.sha }}
         run: |
-          current=$(grep -oP '^ARG MGBA_COMMIT=\K[0-9a-f]+' Dockerfile.gba)
+          current=$(grep -oP '^ARG MGBA_COMMIT=\K[0-9a-f]+' Dockerfile.gba) || {
+            echo "::error::Failed to extract MGBA_COMMIT from Dockerfile.gba" >&2
+            exit 1
+          }
+          if [ -z "${current}" ]; then
+            echo "::error::MGBA_COMMIT not found in Dockerfile.gba" >&2
+            exit 1
+          fi
           echo "current=${current}"
           echo "latest=${LATEST}"
           if [ "${current}" = "${LATEST}" ]; then
@@ -59,6 +69,11 @@ jobs:
             exit 0
           fi
           sed -i "s/^ARG MGBA_COMMIT=.*/ARG MGBA_COMMIT=${LATEST}/" Dockerfile.gba
+          updated=$(grep -oP '^ARG MGBA_COMMIT=\K[0-9a-f]+' Dockerfile.gba)
+          if [ "${updated}" != "${LATEST}" ]; then
+            echo "::error::Failed to update MGBA_COMMIT in Dockerfile.gba" >&2
+            exit 1
+          fi
           echo "changed=true" >> "${GITHUB_OUTPUT}"
           echo "current=${current}" >> "${GITHUB_OUTPUT}"
 
