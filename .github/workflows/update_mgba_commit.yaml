@@ -1,0 +1,96 @@
+name: Update mGBA commit
+
+on:
+  schedule:
+    # Fridays 06:00 UTC
+    - cron: "0 6 * * 5"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  update:
+    concurrency:
+      group: update-mgba-commit
+      cancel-in-progress: false
+    name: Bump mGBA commit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Resolve latest mGBA master commit
+        id: mgba
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          latest=$(curl -fsSL \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            https://api.github.com/repos/mgba-emu/mgba/commits/master \
+            | jq -r .sha)
+          if [ -z "${latest}" ] || [ "${latest}" = "null" ]; then
+            echo "::error::Failed to resolve latest mGBA master commit" >&2
+            exit 1
+          fi
+          echo "sha=${latest}" >> "${GITHUB_OUTPUT}"
+          echo "short=${latest:0:7}" >> "${GITHUB_OUTPUT}"
+
+      - name: Update Dockerfile.gba
+        id: update
+        env:
+          LATEST: ${{ steps.mgba.outputs.sha }}
+        run: |
+          current=$(grep -oP '^ARG MGBA_COMMIT=\K[0-9a-f]+' Dockerfile.gba) || {
+            echo "::error::Failed to extract MGBA_COMMIT from Dockerfile.gba" >&2
+            exit 1
+          }
+          if [ -z "${current}" ]; then
+            echo "::error::MGBA_COMMIT not found in Dockerfile.gba" >&2
+            exit 1
+          fi
+          echo "current=${current}"
+          echo "latest=${LATEST}"
+          if [ "${current}" = "${LATEST}" ]; then
+            echo "changed=false" >> "${GITHUB_OUTPUT}"
+            echo "Already up to date."
+            exit 0
+          fi
+          sed -i "s/^ARG MGBA_COMMIT=.*/ARG MGBA_COMMIT=${LATEST}/" Dockerfile.gba
+          updated=$(grep -oP '^ARG MGBA_COMMIT=\K[0-9a-f]+' Dockerfile.gba)
+          if [ "${updated}" != "${LATEST}" ]; then
+            echo "::error::Failed to update MGBA_COMMIT in Dockerfile.gba" >&2
+            exit 1
+          fi
+          echo "changed=true" >> "${GITHUB_OUTPUT}"
+          echo "current=${current}" >> "${GITHUB_OUTPUT}"
+
+      - name: Create Pull Request
+        if: steps.update.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@v7.0.8
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: chore/bump-mgba-commit
+          delete-branch: true
+          commit-message: "chore(deps): bump mGBA to ${{ steps.mgba.outputs.short }}"
+          title: "chore(deps): bump mGBA to ${{ steps.mgba.outputs.short }}"
+          assignees: dkrutskikh
+          body: |
+            Automated weekly bump of the pinned mGBA commit in `Dockerfile.gba`.
+
+            - Repo: https://github.com/mgba-emu/mgba
+            - From: `${{ steps.update.outputs.current }}`
+            - To: `${{ steps.mgba.outputs.sha }}` (master HEAD)
+            - Compare: https://github.com/mgba-emu/mgba/compare/${{ steps.update.outputs.current }}...${{ steps.mgba.outputs.sha }}
