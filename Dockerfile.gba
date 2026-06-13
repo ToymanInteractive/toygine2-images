@@ -5,7 +5,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git ca-certificates cmake ninja-build zlib1g-dev \
  && rm -rf /var/lib/apt/lists/*
 
-ARG MGBA_COMMIT=f8082d31fb3ef6af15226e74229d6a5aaec526c6
+ARG MGBA_COMMIT=cfef85394e30b23ef2abe91c195739a623aa719b
 RUN mkdir -p /tmp/mgba \
  && cd /tmp/mgba \
  && git init -q \
