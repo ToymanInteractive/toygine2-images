@@ -82,6 +82,7 @@ jobs:
         uses: peter-evans/create-pull-request@v7.0.8
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+          sign-commits: true
           branch: chore/bump-mgba-commit
           delete-branch: true
           commit-message: "chore(deps): bump mGBA to ${{ steps.mgba.outputs.short }}"
