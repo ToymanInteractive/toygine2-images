@@ -72,6 +72,7 @@ jobs:
           context: .
           file: Dockerfile.${{ matrix.image }}
           platforms: linux/amd64,linux/arm64
+          provenance: false
           push: false
           cache-from: type=registry,ref=ghcr.io/toymaninteractive/toygine2.${{ matrix.image }}.toolchain:buildcache
 
@@ -82,6 +83,7 @@ jobs:
           context: .
           file: Dockerfile.${{ matrix.image }}
           platforms: linux/amd64,linux/arm64
+          provenance: false
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

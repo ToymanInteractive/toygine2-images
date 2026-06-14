@@ -16,6 +16,8 @@ RUN mkdir -p /tmp/mgba \
       -G Ninja \
       -DCMAKE_BUILD_TYPE=Release \
       -DBUILD_HEADLESS=ON \
+      -DBUILD_SHARED=OFF \
+      -DBUILD_STATIC=ON \
       -DBUILD_SDL=OFF \
       -DBUILD_QT=OFF \
       -DBUILD_LIBRETRO=OFF \
