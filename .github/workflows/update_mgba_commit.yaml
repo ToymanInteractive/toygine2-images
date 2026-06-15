@@ -2,8 +2,8 @@ name: Update mGBA commit
 
 on:
   schedule:
-    # Fridays 06:00 UTC
-    - cron: "0 6 * * 5"
+    # Daily 01:00 UTC
+    - cron: "0 1 * * *"
   workflow_dispatch:
 
 permissions:

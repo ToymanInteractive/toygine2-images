@@ -1,9 +1,9 @@
-name: Cleanup old images
+name: Cleanup GHCR
 
 on:
   schedule:
-    # Mondays 04:00 UTC
-    - cron: "0 4 * * 1"
+    # Daily 03:00 UTC
+    - cron: "0 3 * * *"
   workflow_dispatch:
     inputs:
       dry-run:
@@ -19,7 +19,7 @@ jobs:
     concurrency:
       group: cleanup-images-${{ matrix.image }}
       cancel-in-progress: false
-    name: ${{ matrix.image }}
+    name: Cleanup ${{ matrix.image }} old images
     runs-on: ubuntu-26.04
     timeout-minutes: 10
     permissions:
