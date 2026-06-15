@@ -1,5 +1,5 @@
 # --- Stage 1: mGBA builder ---
-FROM devkitpro/devkitarm:20260221 AS mgba-builder
+FROM devkitpro/devkitarm:20260610 AS mgba-builder
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git ca-certificates cmake ninja-build zlib1g-dev \
@@ -26,7 +26,7 @@ RUN mkdir -p /tmp/mgba \
  && cmake --build /tmp/mgba/build --target mgba-headless --parallel "$(nproc)"
 
 # --- Stage 2: final image ---
-FROM devkitpro/devkitarm:20260221
+FROM devkitpro/devkitarm:20260610
 
 COPY --from=mgba-builder /tmp/mgba/build/mgba-headless /usr/local/bin/mgba-headless
 
