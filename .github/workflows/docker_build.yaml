@@ -82,6 +82,7 @@ jobs:
           context: .
           file: Dockerfile.${{ matrix.image }}
           platforms: linux/amd64,linux/arm64
+          # Provenance disabled: multi-platform attestations may cause compatibility issues with some registries and runtimes (see docker/build-push-action#781)
           provenance: false
           push: false
           cache-from: type=registry,ref=ghcr.io/toymaninteractive/toygine2.${{ matrix.image }}.toolchain:buildcache
