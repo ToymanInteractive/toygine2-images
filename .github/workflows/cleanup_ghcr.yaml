@@ -1,0 +1,52 @@
+name: Cleanup old images
+
+on:
+  schedule:
+    # Mondays 04:00 UTC
+    - cron: "0 4 * * 1"
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: "Preview deletions without removing anything"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  cleanup:
+    concurrency:
+      group: cleanup-images-${{ matrix.image }}
+      cancel-in-progress: false
+    name: ${{ matrix.image }}
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    permissions:
+      # Required to delete GHCR package versions owned by the repo's org.
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: gba
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Prune old GHCR versions
+        uses: snok/container-retention-policy@v3.1.0
+        with:
+          account: toymaninteractive
+          token: ${{ secrets.GITHUB_TOKEN }}
+          image-names: toygine2.${{ matrix.image }}.toolchain
+          # Keep the moving "latest" tag and the buildcache used by docker_build.yaml.
+          image-tags: "!latest !buildcache"
+          # Clean orphaned untagged manifests too; multi-arch children of kept tags are protected automatically since v3.1.0.
+          tag-selection: both
+          # Grace period: never touch anything younger than a day (e.g. a build that just published). Retention is governed by keep-n-most-recent.
+          cut-off: 1d
+          # Keep the 10 most recent dated (YYYYMMDD) tags; prune older ones.
+          keep-n-most-recent: 10
+          dry-run: ${{ github.event_name == 'workflow_dispatch' && inputs.dry-run || false }}
