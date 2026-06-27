@@ -5,13 +5,23 @@ on:
     branches:
       - main
     paths:
+      - Dockerfile.3ds
       - Dockerfile.gba
+      - Dockerfile.gc
+      - Dockerfile.nds
+      - Dockerfile.switch
+      - Dockerfile.wii
       - .github/workflows/docker_build.yaml
   pull_request:
     branches:
       - main
     paths:
+      - Dockerfile.3ds
       - Dockerfile.gba
+      - Dockerfile.gc
+      - Dockerfile.nds
+      - Dockerfile.switch
+      - Dockerfile.wii
       - .github/workflows/docker_build.yaml
   workflow_dispatch:
 
@@ -31,7 +41,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          - image: 3ds
           - image: gba
+          - image: gc
+          - image: nds
+          - image: switch
+          - image: wii
 
     name: ${{ matrix.image }}
     runs-on: ubuntu-26.04
