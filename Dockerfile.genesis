@@ -12,8 +12,10 @@ RUN apt-get update -qq && apt-get install -y --no-install-recommends \
 ARG CLOWNMDSDK_COMMIT=f2a1c3419d9da7fddc80902a210ecaecf091fd34
 
 ARG BINUTILS_VERSION=2.46.0
+ARG GCC_VERSION=16.1.0
 # Archive sha256 (empty = check skipped; fill in when pinning versions).
 ARG BINUTILS_SHA256=
+ARG GCC_SHA256=
 
 # Step 0: Git clone and checkout.
 RUN mkdir -p /tmp/clownmdsdk \
@@ -34,6 +36,16 @@ RUN cd /tmp/clownmdsdk/stage1 \
     && tar -xf binutils.tar.xz \
     && bash ./binutils.sh \
     && rm -rf binutils.tar.xz "binutils-${BINUTILS_VERSION}" build-binutils
+
+# Step 2: GCC (C/C++ cross-compiler for m68k-elf) — the longest step.
+RUN cd /tmp/clownmdsdk/stage2 \
+    && MAKEFLAGS="-j$(nproc)" && export MAKEFLAGS \
+    && curl -fSL --retry 3 -o gcc.tar.xz \
+    "https://ftp.gnu.org/gnu/gcc/gcc-${GCC_VERSION}/gcc-${GCC_VERSION}.tar.xz" \
+    && { [ -z "${GCC_SHA256}" ] || echo "${GCC_SHA256}  gcc.tar.xz" | sha256sum -c -; } \
+    && tar -xf gcc.tar.xz \
+    && bash ./gcc.sh \
+    && rm -rf gcc.tar.xz "gcc-${GCC_VERSION}" build-gcc
 
 LABEL org.opencontainers.image.authors="Toyman Interactive <https://github.com/ToymanInteractive>"
 LABEL org.opencontainers.image.url="https://github.com/ToymanInteractive/toygine2-images"
