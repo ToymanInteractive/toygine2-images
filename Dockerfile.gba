@@ -1,11 +1,13 @@
 # --- Stage 1: mGBA builder ---
 FROM devkitpro/devkitarm:20260610 AS mgba-builder
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get update -qq && apt-get install -y --no-install-recommends \
      git ca-certificates cmake ninja-build zlib1g-dev \
      && rm -rf /var/lib/apt/lists/*
 
+# Versions are pinned for reproducibility (bumped like dependencies).
 ARG MGBA_COMMIT=cd3c21052e5f6f1a8126f18b47eacb0a783aa6ba
+
 RUN mkdir -p /tmp/mgba \
      && cd /tmp/mgba \
      && git init -q \
@@ -30,12 +32,14 @@ FROM devkitpro/devkitarm:20260610
 
 COPY --from=mgba-builder /tmp/mgba/build/mgba-headless /usr/local/bin/mgba-headless
 
-LABEL org.opencontainers.image.title="ToyGine2 GBA Toolchain"
-LABEL org.opencontainers.image.description="devkitARM toolchain for building ToyGine2 targeting GBA."
-LABEL org.opencontainers.image.source="https://github.com/ToymanInteractive/toygine2-images"
+LABEL org.opencontainers.image.authors="Toyman Interactive <https://github.com/ToymanInteractive>"
 LABEL org.opencontainers.image.url="https://github.com/ToymanInteractive/toygine2-images"
 LABEL org.opencontainers.image.documentation="https://github.com/ToymanInteractive/toygine2-images/blob/main/README.md"
+LABEL org.opencontainers.image.source="https://github.com/ToymanInteractive/toygine2-images"
+
 LABEL org.opencontainers.image.vendor="Toyman Interactive"
-LABEL org.opencontainers.image.authors="Toyman Interactive <https://github.com/ToymanInteractive>"
 LABEL org.opencontainers.image.licenses="MIT"
+
+LABEL org.opencontainers.image.title="ToyGine2 GBA Toolchain"
+LABEL org.opencontainers.image.description="devkitARM toolchain for building ToyGine2 targeting Nintendo GBA."
 LABEL org.opencontainers.image.base.name="docker.io/devkitpro/devkitarm:20260610"

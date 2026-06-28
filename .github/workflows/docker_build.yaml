@@ -9,6 +9,7 @@ on:
       - Dockerfile.3ds
       - Dockerfile.gba
       - Dockerfile.gc
+      - Dockerfile.genesis
       - Dockerfile.nds
       - Dockerfile.switch
       - Dockerfile.wii
@@ -20,6 +21,7 @@ on:
       - Dockerfile.3ds
       - Dockerfile.gba
       - Dockerfile.gc
+      - Dockerfile.genesis
       - Dockerfile.nds
       - Dockerfile.switch
       - Dockerfile.wii

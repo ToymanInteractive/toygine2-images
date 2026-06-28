@@ -1,0 +1,27 @@
+# --- Stage 1: ClownMDSDK toolchain for Sega Mega Drive/Genesis builder ---
+FROM debian:bookworm-slim AS toolchain-builder
+
+RUN apt-get update -qq && apt-get install -y --no-install-recommends \
+    build-essential cmake git curl ca-certificates patch texinfo flex bison \
+    libgmp-dev libmpfr-dev libmpc-dev libzstd-dev xz-utils \
+    && rm -rf /var/lib/apt/lists/*
+
+# Versions are pinned for reproducibility (bumped like dependencies).
+ARG CLOWNMDSDK_COMMIT=master
+
+RUN git clone https://github.com/Clownacy/clownmdsdk.git clownmdsdk \
+    && cd clownmdsdk \
+    && git checkout --quiet "${CLOWNMDSDK_COMMIT}" \
+    && git submodule update --init --recursive
+
+LABEL org.opencontainers.image.authors="Toyman Interactive <https://github.com/ToymanInteractive>"
+LABEL org.opencontainers.image.url="https://github.com/ToymanInteractive/toygine2-images"
+LABEL org.opencontainers.image.documentation="https://github.com/ToymanInteractive/toygine2-images/blob/main/README.md"
+LABEL org.opencontainers.image.source="https://github.com/ToymanInteractive/toygine2-images"
+
+LABEL org.opencontainers.image.vendor="Toyman Interactive"
+LABEL org.opencontainers.image.licenses="MIT"
+
+LABEL org.opencontainers.image.title="ToyGine2 Genesis Toolchain"
+LABEL org.opencontainers.image.description="ClownMDSDK toolchain for building ToyGine2 targeting Sega Mega Drive/Genesis."
+LABEL org.opencontainers.image.base.name="docker.io/library/debian:bookworm-slim"

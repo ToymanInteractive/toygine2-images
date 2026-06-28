@@ -1,11 +1,13 @@
 ﻿FROM devkitpro/devkita64:20260219
 
-LABEL org.opencontainers.image.title="ToyGine2 Switch Toolchain"
-LABEL org.opencontainers.image.description="devkitARM64 toolchain for building ToyGine2 targeting Switch."
-LABEL org.opencontainers.image.source="https://github.com/ToymanInteractive/toygine2-images"
+LABEL org.opencontainers.image.authors="Toyman Interactive <https://github.com/ToymanInteractive>"
 LABEL org.opencontainers.image.url="https://github.com/ToymanInteractive/toygine2-images"
 LABEL org.opencontainers.image.documentation="https://github.com/ToymanInteractive/toygine2-images/blob/main/README.md"
+LABEL org.opencontainers.image.source="https://github.com/ToymanInteractive/toygine2-images"
+
 LABEL org.opencontainers.image.vendor="Toyman Interactive"
-LABEL org.opencontainers.image.authors="Toyman Interactive <https://github.com/ToymanInteractive>"
 LABEL org.opencontainers.image.licenses="MIT"
+
+LABEL org.opencontainers.image.title="ToyGine2 Switch Toolchain"
+LABEL org.opencontainers.image.description="devkitARM64 toolchain for building ToyGine2 targeting Nintendo Switch."
 LABEL org.opencontainers.image.base.name="docker.io/devkitpro/devkita64:20260219"
