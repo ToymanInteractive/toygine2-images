@@ -1,0 +1,11 @@
+﻿FROM devkitpro/devkitarm:20260610
+
+LABEL org.opencontainers.image.title="ToyGine2 3DS Toolchain"
+LABEL org.opencontainers.image.description="devkitARM toolchain for building ToyGine2 targeting 3DS."
+LABEL org.opencontainers.image.source="https://github.com/ToymanInteractive/toygine2-images"
+LABEL org.opencontainers.image.url="https://github.com/ToymanInteractive/toygine2-images"
+LABEL org.opencontainers.image.documentation="https://github.com/ToymanInteractive/toygine2-images/blob/main/README.md"
+LABEL org.opencontainers.image.vendor="Toyman Interactive"
+LABEL org.opencontainers.image.authors="Toyman Interactive <https://github.com/ToymanInteractive>"
+LABEL org.opencontainers.image.licenses="MIT"
+LABEL org.opencontainers.image.base.name="docker.io/devkitpro/devkitarm:20260610"
