@@ -10,12 +10,18 @@ RUN apt-get update -qq && apt-get install -y --no-install-recommends \
 
 # Versions are pinned for reproducibility (bumped like dependencies).
 ARG CLOWNMDSDK_COMMIT=f2a1c3419d9da7fddc80902a210ecaecf091fd34
-
 ARG BINUTILS_VERSION=2.46.0
 ARG GCC_VERSION=16.1.0
+
 # Archive sha256 (empty = check skipped; fill in when pinning versions).
 ARG BINUTILS_SHA256=
 ARG GCC_SHA256=
+
+# 1 = skip building example/ for the smoke test after install.
+ARG SKIP_SMOKE_TEST=0
+
+ENV PREFIX=/opt/clownmdsdk
+ENV PATH="${PREFIX}/bin:${PATH}"
 
 # Step 0: Git clone and checkout.
 RUN mkdir -p /tmp/clownmdsdk \
@@ -46,6 +52,38 @@ RUN cd /tmp/clownmdsdk/stage2 \
     && tar -xf gcc.tar.xz \
     && bash ./gcc.sh \
     && rm -rf gcc.tar.xz "gcc-${GCC_VERSION}" build-gcc
+
+# Stage 3: AS — Z80 macro assembler (GNU Binutils cannot assemble Z80).
+RUN cd /tmp/clownmdsdk/stage3 && bash ./as.sh "$(nproc)"
+
+# Stage 4: headers, makefile scripts, linker script, ClownLZSS.
+RUN cd /tmp/clownmdsdk/stage4 && bash ./misc.sh "$(nproc)"
+
+# Smoke test: build the template cartridge with the freshly built toolchain.
+RUN if [ "${SKIP_SMOKE_TEST}" != "1" ]; then \
+    make -C /tmp/clownmdsdk/example/template-cartridge -j"$(nproc)" \
+    && "${PREFIX}/bin/m68k-elf-g++" --version; \
+    fi
+
+# --- Stage 2: final image ---
+FROM debian:bookworm-slim
+
+# make — for Makefile projects (cartridge.mk/generic.mk); cmake — for toolchain.cmake;
+# libgmp10/libmpfr6/libmpc3/libzstd1 — shared libs that the host m68k-elf-g++
+# executable is linked against (it is a cross-compiler, but runs on the host).
+RUN apt-get update -qq && apt-get install -y --no-install-recommends \
+    make cmake libgmp10 libmpfr6 libmpc3 libzstd1 \
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd -ms /bin/bash builder
+
+COPY --from=toolchain-builder /opt/clownmdsdk /opt/clownmdsdk
+ENV PREFIX=/opt/clownmdsdk
+ENV PATH="${PREFIX}/bin:${PATH}"
+
+USER builder
+WORKDIR /workspace
+ENTRYPOINT ["/bin/bash", "-c"]
+CMD ["bash"]
 
 LABEL org.opencontainers.image.authors="Toyman Interactive <https://github.com/ToymanInteractive>"
 LABEL org.opencontainers.image.url="https://github.com/ToymanInteractive/toygine2-images"
