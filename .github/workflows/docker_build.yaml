@@ -46,6 +46,7 @@ jobs:
           - image: 3ds
           - image: gba
           - image: gc
+          - image: genesis
           - image: nds
           - image: switch
           - image: wii
