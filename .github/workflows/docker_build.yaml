@@ -56,7 +56,7 @@ jobs:
     # arm64 is built under QEMU emulation (mGBA, and the genesis ClownMDSDK
     # toolchain incl. GCC, are compiled from source), which is much slower than
     # native; allow extra time for cold builds.
-    timeout-minutes: 180
+    timeout-minutes: 240
     defaults:
       run:
         shell: bash
