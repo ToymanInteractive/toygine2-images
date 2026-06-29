@@ -1,0 +1,28 @@
+name: 3ds
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - Dockerfile.3ds
+      - .github/workflows/build_3ds.yaml
+  pull_request:
+    branches:
+      - main
+    paths:
+      - Dockerfile.3ds
+      - .github/workflows/build_3ds.yaml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/_docker_build.yaml
+    with:
+      image: 3ds

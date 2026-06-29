@@ -1,0 +1,28 @@
+name: wii
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - Dockerfile.wii
+      - .github/workflows/build_wii.yaml
+  pull_request:
+    branches:
+      - main
+    paths:
+      - Dockerfile.wii
+      - .github/workflows/build_wii.yaml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/_docker_build.yaml
+    with:
+      image: wii

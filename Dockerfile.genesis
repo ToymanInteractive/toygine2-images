@@ -107,7 +107,6 @@ ENV PATH="${PREFIX}/bin:${PATH}"
 
 USER builder
 WORKDIR /workspace
-ENTRYPOINT ["/bin/bash", "-c"]
 CMD ["bash"]
 
 LABEL org.opencontainers.image.authors="Toyman Interactive <https://github.com/ToymanInteractive>"

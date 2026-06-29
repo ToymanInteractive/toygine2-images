@@ -1,0 +1,28 @@
+name: switch
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - Dockerfile.switch
+      - .github/workflows/build_switch.yaml
+  pull_request:
+    branches:
+      - main
+    paths:
+      - Dockerfile.switch
+      - .github/workflows/build_switch.yaml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/_docker_build.yaml
+    with:
+      image: switch

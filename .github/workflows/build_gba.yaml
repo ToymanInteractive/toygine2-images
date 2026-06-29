@@ -1,0 +1,30 @@
+name: gba
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - Dockerfile.gba
+      - .github/workflows/build_gba.yaml
+  pull_request:
+    branches:
+      - main
+    paths:
+      - Dockerfile.gba
+      - .github/workflows/build_gba.yaml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/_docker_build.yaml
+    with:
+      image: gba
+      # mGBA is compiled from source; arm64 under QEMU needs extra time.
+      timeout: 60
