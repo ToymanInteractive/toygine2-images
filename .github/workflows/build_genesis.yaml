@@ -1,0 +1,30 @@
+name: genesis
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - Dockerfile.genesis
+      - .github/workflows/build_genesis.yaml
+  pull_request:
+    branches:
+      - main
+    paths:
+      - Dockerfile.genesis
+      - .github/workflows/build_genesis.yaml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/_docker_build.yaml
+    with:
+      image: genesis
+      # ClownMDSDK toolchain (incl. GCC) is built from source; arm64 under QEMU needs extra time.
+      timeout: 240

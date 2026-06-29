@@ -1,0 +1,28 @@
+name: gc
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - Dockerfile.gc
+      - .github/workflows/build_gc.yaml
+  pull_request:
+    branches:
+      - main
+    paths:
+      - Dockerfile.gc
+      - .github/workflows/build_gc.yaml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/_docker_build.yaml
+    with:
+      image: gc

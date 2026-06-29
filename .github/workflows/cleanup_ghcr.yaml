@@ -41,7 +41,7 @@ jobs:
           account: toymaninteractive
           token: ${{ secrets.GITHUB_TOKEN }}
           image-names: toygine2.${{ matrix.image }}.toolchain
-          # Keep the moving "latest" tag and the buildcache used by docker_build.yaml.
+          # Keep the moving "latest" tag and the buildcache used by _docker_build.yaml.
           image-tags: "!latest !buildcache"
           # Clean orphaned untagged manifests too; multi-arch children of kept tags are protected automatically since v3.1.0.
           tag-selection: both

@@ -1,11 +1,25 @@
-﻿FROM devkitpro/devkitarm:20260610
+# Image with the devkitPro devkitARM toolchain for building ToyGine2 targeting Nintendo DS.
+#
+# Thin wrapper over the upstream devkitpro/devkitarm image: pinned to a specific date
+# tag and annotated with OCI labels for the toygine2 CI/registry. No extra tooling is
+# added — devkitPro already ships the cross-compiler and platform libraries (libnds)
+# used by ToyGine2's Makefiles.
+#
+# Usage (same as the other toygine2 images):
+#   docker build -t toygine2-nds -f Dockerfile.nds .
+#   docker run --rm -v "$PWD":/workspace -w /workspace toygine2-nds \
+#       make -C path/to/project
 
-LABEL org.opencontainers.image.title="ToyGine2 NDS Toolchain"
-LABEL org.opencontainers.image.description="devkitARM toolchain for building ToyGine2 targeting NDS."
-LABEL org.opencontainers.image.source="https://github.com/ToymanInteractive/toygine2-images"
+FROM devkitpro/devkitarm:20260610
+
+LABEL org.opencontainers.image.authors="Toyman Interactive <https://github.com/ToymanInteractive>"
 LABEL org.opencontainers.image.url="https://github.com/ToymanInteractive/toygine2-images"
 LABEL org.opencontainers.image.documentation="https://github.com/ToymanInteractive/toygine2-images/blob/main/README.md"
+LABEL org.opencontainers.image.source="https://github.com/ToymanInteractive/toygine2-images"
+
 LABEL org.opencontainers.image.vendor="Toyman Interactive"
-LABEL org.opencontainers.image.authors="Toyman Interactive <https://github.com/ToymanInteractive>"
 LABEL org.opencontainers.image.licenses="MIT"
+
+LABEL org.opencontainers.image.title="ToyGine2 NDS Toolchain"
+LABEL org.opencontainers.image.description="devkitARM toolchain for building ToyGine2 targeting Nintendo DS."
 LABEL org.opencontainers.image.base.name="docker.io/devkitpro/devkitarm:20260610"

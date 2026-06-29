@@ -1,29 +1,19 @@
-name: Build Docker images
+name: Build Docker image
 
+# Reusable build/publish logic shared by the per-image build_<image>.yaml workflows.
+# Each caller triggers only on its own Dockerfile, so unrelated images are not rebuilt.
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - .github/workflows/docker_build.yaml
-      - Dockerfile.3ds
-      - Dockerfile.gba
-      - Dockerfile.gc
-      - Dockerfile.nds
-      - Dockerfile.switch
-      - Dockerfile.wii
-  pull_request:
-    branches:
-      - main
-    paths:
-      - .github/workflows/docker_build.yaml
-      - Dockerfile.3ds
-      - Dockerfile.gba
-      - Dockerfile.gc
-      - Dockerfile.nds
-      - Dockerfile.switch
-      - Dockerfile.wii
-  workflow_dispatch:
+  workflow_call:
+    inputs:
+      image:
+        description: Image target; selects Dockerfile.<image> and the published image name.
+        required: true
+        type: string
+      timeout:
+        description: Job timeout in minutes (raise for from-source builds like gba/genesis).
+        required: false
+        type: number
+        default: 30
 
 permissions:
   contents: read
@@ -31,28 +21,19 @@ permissions:
 jobs:
   build:
     concurrency:
-      group: docker-build-${{ matrix.image }}-${{ github.ref }}
+      group: docker-build-${{ inputs.image }}-${{ github.ref }}
       # Never cancel an in-flight publish on main; supersede stale PR builds.
       cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
     permissions:
       contents: read
       packages: write
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - image: 3ds
-          - image: gba
-          - image: gc
-          - image: nds
-          - image: switch
-          - image: wii
 
-    name: ${{ matrix.image }}
+    name: ${{ inputs.image }}
     runs-on: ubuntu-26.04
-    # arm64 is built under QEMU emulation (mGBA is compiled from source),
-    # which is much slower than native; allow extra time for cold builds.
-    timeout-minutes: 120
+    # arm64 is built under QEMU emulation (mGBA, and the genesis ClownMDSDK
+    # toolchain incl. GCC, are compiled from source), which is much slower than
+    # native; callers raise the timeout for those cold builds.
+    timeout-minutes: ${{ inputs.timeout }}
     defaults:
       run:
         shell: bash
@@ -84,7 +65,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v6.1.0
         with:
-          images: ghcr.io/toymaninteractive/toygine2.${{ matrix.image }}.toolchain
+          images: ghcr.io/toymaninteractive/toygine2.${{ inputs.image }}.toolchain
           tags: |
             type=raw,value=latest
             type=raw,value={{date 'YYYYMMDD'}}
@@ -94,23 +75,23 @@ jobs:
         uses: docker/build-push-action@v7.2.0
         with:
           context: .
-          file: Dockerfile.${{ matrix.image }}
+          file: Dockerfile.${{ inputs.image }}
           platforms: linux/amd64,linux/arm64
           # Provenance disabled: multi-platform attestations may cause compatibility issues with some registries and runtimes (see docker/build-push-action#781)
           provenance: false
           push: false
-          cache-from: type=registry,ref=ghcr.io/toymaninteractive/toygine2.${{ matrix.image }}.toolchain:buildcache
+          cache-from: type=registry,ref=ghcr.io/toymaninteractive/toygine2.${{ inputs.image }}.toolchain:buildcache
 
       - name: Build and push
         if: ${{ github.ref == 'refs/heads/main' }}
         uses: docker/build-push-action@v7.2.0
         with:
           context: .
-          file: Dockerfile.${{ matrix.image }}
+          file: Dockerfile.${{ inputs.image }}
           platforms: linux/amd64,linux/arm64
           provenance: false
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=registry,ref=ghcr.io/toymaninteractive/toygine2.${{ matrix.image }}.toolchain:buildcache
-          cache-to: type=registry,ref=ghcr.io/toymaninteractive/toygine2.${{ matrix.image }}.toolchain:buildcache,mode=max
+          cache-from: type=registry,ref=ghcr.io/toymaninteractive/toygine2.${{ inputs.image }}.toolchain:buildcache
+          cache-to: type=registry,ref=ghcr.io/toymaninteractive/toygine2.${{ inputs.image }}.toolchain:buildcache,mode=max

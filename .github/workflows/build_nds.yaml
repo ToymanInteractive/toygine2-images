@@ -1,0 +1,28 @@
+name: nds
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - Dockerfile.nds
+      - .github/workflows/build_nds.yaml
+  pull_request:
+    branches:
+      - main
+    paths:
+      - Dockerfile.nds
+      - .github/workflows/build_nds.yaml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/_docker_build.yaml
+    with:
+      image: nds

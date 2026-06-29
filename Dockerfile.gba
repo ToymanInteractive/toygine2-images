@@ -1,41 +1,62 @@
+# Image with the devkitARM toolchain for building ToyGine2 targeting Nintendo GBA,
+# plus a headless mGBA build for running GBA ROMs in CI.
+#
+# Stage 1 compiles mGBA (headless, static; no SDL/Qt/FFmpeg) from a pinned commit;
+# the final image is the upstream devkitARM toolchain with the mgba-headless binary
+# copied into /usr/local/bin for ROM smoke-tests.
+#
+# Usage (same as the other toygine2 images):
+#   docker build -t toygine2-gba -f Dockerfile.gba .
+#   docker run --rm -v "$PWD":/workspace -w /workspace toygine2-gba \
+#       make -C path/to/project
+
 # --- Stage 1: mGBA builder ---
 FROM devkitpro/devkitarm:20260610 AS mgba-builder
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
+RUN apt-get update -qq && apt-get install -y --no-install-recommends \
      git ca-certificates cmake ninja-build zlib1g-dev \
      && rm -rf /var/lib/apt/lists/*
 
+# Versions are pinned for reproducibility (bumped like dependencies).
 ARG MGBA_COMMIT=cd3c21052e5f6f1a8126f18b47eacb0a783aa6ba
+
+# Step 0: Git clone and checkout.
 RUN mkdir -p /tmp/mgba \
-     && cd /tmp/mgba \
-     && git init -q \
-     && git remote add origin https://github.com/mgba-emu/mgba.git \
-     && git fetch --depth 1 origin "${MGBA_COMMIT}" \
-     && git checkout --detach FETCH_HEAD \
-     && cmake -S /tmp/mgba -B /tmp/mgba/build \
-     -G Ninja \
-     -DCMAKE_BUILD_TYPE=Release \
-     -DBUILD_HEADLESS=ON \
-     -DBUILD_SHARED=OFF \
-     -DBUILD_STATIC=ON \
-     -DBUILD_SDL=OFF \
-     -DBUILD_QT=OFF \
-     -DBUILD_LIBRETRO=OFF \
-     -DUSE_FFMPEG=OFF \
-     -DUSE_DISCORD_RPC=OFF \
-     && cmake --build /tmp/mgba/build --target mgba-headless --parallel "$(nproc)"
+    && cd /tmp/mgba \
+    && git init -q \
+    && git remote add origin https://github.com/mgba-emu/mgba.git \
+    && git fetch --depth 1 origin "${MGBA_COMMIT}" \
+    && git checkout --detach FETCH_HEAD
+
+# Step 1: Build headless mGBA.
+RUN cmake -S /tmp/mgba -B /tmp/mgba/build \
+        -G Ninja \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DBUILD_HEADLESS=ON \
+        -DBUILD_SHARED=OFF \
+        -DBUILD_STATIC=ON \
+        -DBUILD_SDL=OFF \
+        -DBUILD_QT=OFF \
+        -DBUILD_LIBRETRO=OFF \
+        -DUSE_FFMPEG=OFF \
+        -DUSE_DISCORD_RPC=OFF \
+    && cmake --build /tmp/mgba/build --target mgba-headless --parallel "$(nproc)"
 
 # --- Stage 2: final image ---
 FROM devkitpro/devkitarm:20260610
 
 COPY --from=mgba-builder /tmp/mgba/build/mgba-headless /usr/local/bin/mgba-headless
 
-LABEL org.opencontainers.image.title="ToyGine2 GBA Toolchain"
-LABEL org.opencontainers.image.description="devkitARM toolchain for building ToyGine2 targeting GBA."
-LABEL org.opencontainers.image.source="https://github.com/ToymanInteractive/toygine2-images"
+LABEL org.opencontainers.image.authors="Toyman Interactive <https://github.com/ToymanInteractive>"
 LABEL org.opencontainers.image.url="https://github.com/ToymanInteractive/toygine2-images"
 LABEL org.opencontainers.image.documentation="https://github.com/ToymanInteractive/toygine2-images/blob/main/README.md"
+LABEL org.opencontainers.image.source="https://github.com/ToymanInteractive/toygine2-images"
+
 LABEL org.opencontainers.image.vendor="Toyman Interactive"
-LABEL org.opencontainers.image.authors="Toyman Interactive <https://github.com/ToymanInteractive>"
 LABEL org.opencontainers.image.licenses="MIT"
+
+LABEL org.opencontainers.image.title="ToyGine2 GBA Toolchain"
+LABEL org.opencontainers.image.description="devkitARM toolchain for building ToyGine2 targeting Nintendo GBA."
 LABEL org.opencontainers.image.base.name="docker.io/devkitpro/devkitarm:20260610"
