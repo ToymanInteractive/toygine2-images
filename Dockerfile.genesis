@@ -1,8 +1,26 @@
-# --- Stage 1: ClownMDSDK toolchain for Sega Mega Drive/Genesis builder ---
+# Image with a ready-to-use ClownMDSDK toolchain for Sega Mega Drive/Genesis (m68k-elf).
+#
+# The SDK ships no binaries — the toolchain is built from source in four stages:
+#   stage1  GNU Binutils  (assembler/linker for m68k-elf)
+#   stage2  GCC           (C/C++ cross-compiler for m68k-elf) — the longest one
+#   stage3  AS            (Alfred Arnold's Z80 macro assembler; asl-releases submodule)
+#   stage4  misc          (headers, cartridge.mk/generic.mk, cartridge.ld, ClownLZSS)
+#
+# The toolchain is installed into /opt/clownmdsdk and copied into the final image
+# by the runtime stage.
+#
+# Usage (same as the other toygine2 images):
+#   docker build -t toygine2-genesis -f Dockerfile.genesis .
+#   docker run --rm -v "$PWD":/workspace -w /workspace toygine2-genesis \
+#       make -C path/to/project
+
+# --- Stage 1: ClownMDSDK toolchain builder ---
 FROM debian:bookworm-slim AS toolchain-builder
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
+# build-essential/texinfo/flex/bison + libgmp/mpfr/mpc/zstd-dev are needed to build
+# binutils and gcc; cmake — for AS (stage3) and ClownLZSS (stage4); xz-utils — extraction.
 RUN apt-get update -qq && apt-get install -y --no-install-recommends \
     build-essential cmake git curl ca-certificates patch texinfo flex bison \
     libgmp-dev libmpfr-dev libmpc-dev libzstd-dev xz-utils \
@@ -53,11 +71,18 @@ RUN cd /tmp/clownmdsdk/stage2 \
     && bash ./gcc.sh \
     && rm -rf gcc.tar.xz "gcc-${GCC_VERSION}" build-gcc
 
-# Stage 3: AS — Z80 macro assembler (GNU Binutils cannot assemble Z80).
+# Step 3: AS — Z80 macro assembler (GNU Binutils cannot assemble Z80).
 RUN cd /tmp/clownmdsdk/stage3 && bash ./as.sh "$(nproc)"
 
-# Stage 4: headers, makefile scripts, linker script, ClownLZSS.
-RUN cd /tmp/clownmdsdk/stage4 && bash ./misc.sh "$(nproc)"
+# Step 4: headers, makefile scripts, linker script, ClownLZSS.
+# Known upstream bug (at the pinned commit above; see git log -- stage4/misc.sh):
+# misc.sh references "../../clownlzss", though per .gitmodules the submodule actually
+# lives in stage4/clownlzss. Patch it on the fly so cmake can find the sources.
+RUN cd /tmp/clownmdsdk/stage4 \
+    && if grep -q '\.\./\.\./clownlzss' misc.sh; then \
+        sed -i 's#\.\./\.\./clownlzss#clownlzss#g' misc.sh; \
+    fi \
+    && bash ./misc.sh "$(nproc)"
 
 # Smoke test: build the template cartridge with the freshly built toolchain.
 RUN if [ "${SKIP_SMOKE_TEST}" != "1" ]; then \

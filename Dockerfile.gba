@@ -1,3 +1,15 @@
+# Image with the devkitARM toolchain for building ToyGine2 targeting Nintendo GBA,
+# plus a headless mGBA build for running GBA ROMs in CI.
+#
+# Stage 1 compiles mGBA (headless, static; no SDL/Qt/FFmpeg) from a pinned commit;
+# the final image is the upstream devkitARM toolchain with the mgba-headless binary
+# copied into /usr/local/bin for ROM smoke-tests.
+#
+# Usage (same as the other toygine2 images):
+#   docker build -t toygine2-gba -f Dockerfile.gba .
+#   docker run --rm -v "$PWD":/workspace -w /workspace toygine2-gba \
+#       make -C path/to/project
+
 # --- Stage 1: mGBA builder ---
 FROM devkitpro/devkitarm:20260610 AS mgba-builder
 

@@ -1,4 +1,16 @@
-﻿FROM devkitpro/devkita64:20260219
+# Image with the devkitPro devkitA64 toolchain for building ToyGine2 targeting Nintendo Switch.
+#
+# Thin wrapper over the upstream devkitpro/devkita64 image: pinned to a specific date
+# tag and annotated with OCI labels for the toygine2 CI/registry. No extra tooling is
+# added — devkitPro already ships the cross-compiler and platform libraries (libnx)
+# used by ToyGine2's Makefiles.
+#
+# Usage (same as the other toygine2 images):
+#   docker build -t toygine2-switch -f Dockerfile.switch .
+#   docker run --rm -v "$PWD":/workspace -w /workspace toygine2-switch \
+#       make -C path/to/project
+
+FROM devkitpro/devkita64:20260219
 
 LABEL org.opencontainers.image.authors="Toyman Interactive <https://github.com/ToymanInteractive>"
 LABEL org.opencontainers.image.url="https://github.com/ToymanInteractive/toygine2-images"

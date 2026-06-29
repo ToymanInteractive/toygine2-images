@@ -1,4 +1,16 @@
-﻿FROM devkitpro/devkitarm:20260610
+# Image with the devkitPro devkitARM toolchain for building ToyGine2 targeting Nintendo 3DS.
+#
+# Thin wrapper over the upstream devkitpro/devkitarm image: pinned to a specific date
+# tag and annotated with OCI labels for the toygine2 CI/registry. No extra tooling is
+# added — devkitPro already ships the cross-compiler and platform libraries (libctru)
+# used by ToyGine2's Makefiles.
+#
+# Usage (same as the other toygine2 images):
+#   docker build -t toygine2-3ds -f Dockerfile.3ds .
+#   docker run --rm -v "$PWD":/workspace -w /workspace toygine2-3ds \
+#       make -C path/to/project
+
+FROM devkitpro/devkitarm:20260610
 
 LABEL org.opencontainers.image.authors="Toyman Interactive <https://github.com/ToymanInteractive>"
 LABEL org.opencontainers.image.url="https://github.com/ToymanInteractive/toygine2-images"
@@ -9,5 +21,5 @@ LABEL org.opencontainers.image.vendor="Toyman Interactive"
 LABEL org.opencontainers.image.licenses="MIT"
 
 LABEL org.opencontainers.image.title="ToyGine2 3DS Toolchain"
-LABEL org.opencontainers.image.description="devkitARM toolchain for building ToyGine2 targeting  3DS."
+LABEL org.opencontainers.image.description="devkitARM toolchain for building ToyGine2 targeting Nintendo 3DS."
 LABEL org.opencontainers.image.base.name="docker.io/devkitpro/devkitarm:20260610"
