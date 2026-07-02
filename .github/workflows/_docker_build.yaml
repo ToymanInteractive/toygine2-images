@@ -45,7 +45,7 @@ jobs:
           persist-credentials: false
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v4.1.0
+        uses: docker/setup-qemu-action@v4.2.0
         with:
           platforms: arm64
 
@@ -72,7 +72,7 @@ jobs:
 
       - name: Build only
         if: ${{ github.ref != 'refs/heads/main' }}
-        uses: docker/build-push-action@v7.2.0
+        uses: docker/build-push-action@v7.3.0
         with:
           context: .
           file: Dockerfile.${{ inputs.image }}
@@ -84,7 +84,7 @@ jobs:
 
       - name: Build and push
         if: ${{ github.ref == 'refs/heads/main' }}
-        uses: docker/build-push-action@v7.2.0
+        uses: docker/build-push-action@v7.3.0
         with:
           context: .
           file: Dockerfile.${{ inputs.image }}
