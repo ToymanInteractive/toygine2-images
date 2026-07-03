@@ -27,7 +27,7 @@ RUN apt-get update -qq && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Versions are pinned for reproducibility (bumped like dependencies).
-ARG CLOWNMDSDK_COMMIT=f2a1c3419d9da7fddc80902a210ecaecf091fd34
+ARG CLOWNMDSDK_COMMIT=47b426a04c1ea189e91b0acd15f425a1a3b839a3
 ARG BINUTILS_VERSION=2.46.0
 ARG GCC_VERSION=16.1.0
 
@@ -75,13 +75,7 @@ RUN cd /tmp/clownmdsdk/stage2 \
 RUN cd /tmp/clownmdsdk/stage3 && bash ./as.sh "$(nproc)"
 
 # Step 4: headers, makefile scripts, linker script, ClownLZSS.
-# Known upstream bug (at the pinned commit above; see git log -- stage4/misc.sh):
-# misc.sh references "../../clownlzss", though per .gitmodules the submodule actually
-# lives in stage4/clownlzss. Patch it on the fly so cmake can find the sources.
 RUN cd /tmp/clownmdsdk/stage4 \
-    && if grep -q '\.\./\.\./clownlzss' misc.sh; then \
-        sed -i 's#\.\./\.\./clownlzss#clownlzss#g' misc.sh; \
-    fi \
     && bash ./misc.sh "$(nproc)"
 
 # Smoke test: build the template cartridge with the freshly built toolchain.
