@@ -17,6 +17,7 @@ The toolchain is installed into `/opt/clownmdsdk`.
 Run (build a Makefile project mounted from the host):
 
 ```sh
-docker run --rm -v "$PWD":/workspace -w /workspace toygine2-genesis \
+docker run --rm -v "$PWD":/workspace -w /workspace \
+    ghcr.io/toymaninteractive/toygine2.genesis.toolchain:latest \
     make -C path/to/project
 ```
