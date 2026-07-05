@@ -1,4 +1,4 @@
-name: Update mGBA commit
+name: Update ClownMDSDK commit
 
 on:
   schedule:
@@ -12,9 +12,9 @@ permissions:
 jobs:
   update:
     concurrency:
-      group: update-mgba-commit
+      group: update-clownmdsdk-commit
       cancel-in-progress: false
-    name: Bump mGBA commit
+    name: Bump ClownMDSDK commit
     runs-on: ubuntu-26.04
     timeout-minutes: 10
     permissions:
@@ -30,8 +30,8 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Resolve latest mGBA master commit
-        id: mgba
+      - name: Resolve latest ClownMDSDK master commit
+        id: clownmdsdk
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -39,26 +39,26 @@ jobs:
             -H "Authorization: Bearer ${GH_TOKEN}" \
             -H "Accept: application/vnd.github+json" \
             -H "X-GitHub-Api-Version: 2022-11-28" \
-            https://api.github.com/repos/mgba-emu/mgba/commits/master \
+            https://api.github.com/repos/Clownacy/clownmdsdk/commits/master \
             | jq -r .sha)
           if [ -z "${latest}" ] || [ "${latest}" = "null" ]; then
-            echo "::error::Failed to resolve latest mGBA master commit" >&2
+            echo "::error::Failed to resolve latest ClownMDSDK master commit" >&2
             exit 1
           fi
           echo "sha=${latest}" >> "${GITHUB_OUTPUT}"
           echo "short=${latest:0:7}" >> "${GITHUB_OUTPUT}"
 
-      - name: Update Dockerfile.gba
+      - name: Update Dockerfile.genesis
         id: update
         env:
-          LATEST: ${{ steps.mgba.outputs.sha }}
+          LATEST: ${{ steps.clownmdsdk.outputs.sha }}
         run: |
-          current=$(grep -oP '^ARG MGBA_COMMIT=\K[0-9a-f]+' Dockerfile.gba) || {
-            echo "::error::Failed to extract MGBA_COMMIT from Dockerfile.gba" >&2
+          current=$(grep -oP '^ARG CLOWNMDSDK_COMMIT=\K[0-9a-f]+' Dockerfile.genesis) || {
+            echo "::error::Failed to extract CLOWNMDSDK_COMMIT from Dockerfile.genesis" >&2
             exit 1
           }
           if [ -z "${current}" ]; then
-            echo "::error::MGBA_COMMIT not found in Dockerfile.gba" >&2
+            echo "::error::CLOWNMDSDK_COMMIT not found in Dockerfile.genesis" >&2
             exit 1
           fi
           echo "current=${current}"
@@ -68,10 +68,10 @@ jobs:
             echo "Already up to date."
             exit 0
           fi
-          sed -i "s/^ARG MGBA_COMMIT=.*/ARG MGBA_COMMIT=${LATEST}/" Dockerfile.gba
-          updated=$(grep -oP '^ARG MGBA_COMMIT=\K[0-9a-f]+' Dockerfile.gba)
+          sed -i "s/^ARG CLOWNMDSDK_COMMIT=.*/ARG CLOWNMDSDK_COMMIT=${LATEST}/" Dockerfile.genesis
+          updated=$(grep -oP '^ARG CLOWNMDSDK_COMMIT=\K[0-9a-f]+' Dockerfile.genesis)
           if [ "${updated}" != "${LATEST}" ]; then
-            echo "::error::Failed to update MGBA_COMMIT in Dockerfile.gba" >&2
+            echo "::error::Failed to update CLOWNMDSDK_COMMIT in Dockerfile.genesis" >&2
             exit 1
           fi
           echo "changed=true" >> "${GITHUB_OUTPUT}"
@@ -83,15 +83,15 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           sign-commits: true
-          branch: chore/bump-mgba-commit
+          branch: chore/bump-clownmdsdk-commit
           delete-branch: true
-          commit-message: "chore(deps): bump mGBA to ${{ steps.mgba.outputs.short }}"
-          title: "chore(deps): bump mGBA to ${{ steps.mgba.outputs.short }}"
+          commit-message: "chore(deps): bump ClownMDSDK to ${{ steps.clownmdsdk.outputs.short }}"
+          title: "chore(deps): bump ClownMDSDK to ${{ steps.clownmdsdk.outputs.short }}"
           assignees: dkrutskikh
           body: |
-            Automated weekly bump of the pinned mGBA commit in `Dockerfile.gba`.
+            Automated weekly bump of the pinned ClownMDSDK commit in `Dockerfile.genesis`.
 
-            - Repo: https://github.com/mgba-emu/mgba
+            - Repo: https://github.com/Clownacy/clownmdsdk
             - From: `${{ steps.update.outputs.current }}`
-            - To: `${{ steps.mgba.outputs.sha }}` (master HEAD)
-            - Compare: https://github.com/mgba-emu/mgba/compare/${{ steps.update.outputs.current }}...${{ steps.mgba.outputs.sha }}
+            - To: `${{ steps.clownmdsdk.outputs.sha }}` (master HEAD)
+            - Compare: https://github.com/Clownacy/clownmdsdk/compare/${{ steps.update.outputs.current }}...${{ steps.clownmdsdk.outputs.sha }}
