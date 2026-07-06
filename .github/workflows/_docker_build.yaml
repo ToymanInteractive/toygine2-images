@@ -55,7 +55,7 @@ jobs:
       - name: Log in to GHCR
         # Forked-PR runs have no access to secrets; skip login there (cache reads may miss, but the build still validates). Always logs in for push/dispatch.
         if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
-        uses: docker/login-action@v4.3.0
+        uses: docker/login-action@v4.4.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
