@@ -1,4 +1,4 @@
-name: 3ds
+name: Build Nintendo 3DS toolchain
 
 on:
   push:

@@ -1,4 +1,4 @@
-name: nds
+name: Build Nintendo NDS toolchain
 
 on:
   push:

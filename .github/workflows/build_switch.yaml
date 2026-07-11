@@ -1,4 +1,4 @@
-name: switch
+name: Build Nintendo Switch toolchain
 
 on:
   push:

@@ -4,13 +4,12 @@ on:
   pull_request:
     types: [opened, reopened, ready_for_review]
 
-permissions:
-  pull-requests: write
-
 jobs:
   assign:
     name: PR author auto assign
     runs-on: ubuntu-slim
+    permissions:
+      pull-requests: write
     timeout-minutes: 10
     defaults:
       run:

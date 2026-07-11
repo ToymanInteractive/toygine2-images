@@ -1,4 +1,4 @@
-name: genesis
+name: Build Sega Mega Drive/Genesis toolchain
 
 on:
   push:

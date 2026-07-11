@@ -1,4 +1,4 @@
-name: gc
+name: Build Nintendo GameCube toolchain
 
 on:
   push:
