@@ -23,3 +23,5 @@ LABEL org.opencontainers.image.licenses="MIT"
 LABEL org.opencontainers.image.title="ToyGine2 Wii Toolchain"
 LABEL org.opencontainers.image.description="devkitPPC toolchain for building ToyGine2 targeting Nintendo Wii."
 LABEL org.opencontainers.image.base.name="docker.io/devkitpro/devkitppc:20260503"
+
+LABEL com.toygine2.console="Nintendo Wii"

@@ -10,7 +10,7 @@ on:
         required: true
         type: string
       timeout:
-        description: Job timeout in minutes (raise for from-source builds like gba/genesis).
+        description: Job timeout in minutes (raise for from-source builds like GBA / MD).
         required: false
         type: number
         default: 30
@@ -30,7 +30,7 @@ jobs:
 
     name: ${{ inputs.image }}
     runs-on: ubuntu-26.04
-    # arm64 is built under QEMU emulation (mGBA, and the genesis ClownMDSDK
+    # arm64 is built under QEMU emulation (mGBA, and the MD ClownMDSDK
     # toolchain incl. GCC, are compiled from source), which is much slower than
     # native; callers raise the timeout for those cold builds.
     timeout-minutes: ${{ inputs.timeout }}

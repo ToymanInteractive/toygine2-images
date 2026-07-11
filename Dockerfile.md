@@ -10,8 +10,8 @@
 # by the runtime stage.
 #
 # Usage (same as the other toygine2 images):
-#   docker build -t toygine2-genesis -f Dockerfile.genesis .
-#   docker run --rm -v "$PWD":/workspace -w /workspace toygine2-genesis \
+#   docker build -t toygine2-md -f Dockerfile.md .
+#   docker run --rm -v "$PWD":/workspace -w /workspace toygine2-md \
 #       make -C path/to/project
 
 # --- Stage 1: ClownMDSDK toolchain builder ---
@@ -111,6 +111,8 @@ LABEL org.opencontainers.image.source="https://github.com/ToymanInteractive/toyg
 LABEL org.opencontainers.image.vendor="Toyman Interactive"
 LABEL org.opencontainers.image.licenses="MIT"
 
-LABEL org.opencontainers.image.title="ToyGine2 Genesis Toolchain"
+LABEL org.opencontainers.image.title="ToyGine2 Mega Drive/Genesis Toolchain"
 LABEL org.opencontainers.image.description="ClownMDSDK toolchain for building ToyGine2 targeting Sega Mega Drive/Genesis."
 LABEL org.opencontainers.image.base.name="docker.io/library/debian:bookworm-slim"
+
+LABEL com.toygine2.console="Sega Mega Drive/Genesis"

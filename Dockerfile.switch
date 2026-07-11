@@ -23,3 +23,5 @@ LABEL org.opencontainers.image.licenses="MIT"
 LABEL org.opencontainers.image.title="ToyGine2 Switch Toolchain"
 LABEL org.opencontainers.image.description="devkitARM64 toolchain for building ToyGine2 targeting Nintendo Switch."
 LABEL org.opencontainers.image.base.name="docker.io/devkitpro/devkita64:20260219"
+
+LABEL com.toygine2.console="Nintendo Switch"

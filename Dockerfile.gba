@@ -60,3 +60,5 @@ LABEL org.opencontainers.image.licenses="MIT"
 LABEL org.opencontainers.image.title="ToyGine2 GBA Toolchain"
 LABEL org.opencontainers.image.description="devkitARM toolchain for building ToyGine2 targeting Nintendo GBA."
 LABEL org.opencontainers.image.base.name="docker.io/devkitpro/devkitarm:20260610"
+
+LABEL com.toygine2.console="Nintendo Game Boy Advance"
