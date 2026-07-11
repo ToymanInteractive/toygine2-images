@@ -25,3 +25,4 @@ LABEL org.opencontainers.image.description="devkitPPC toolchain for building Toy
 LABEL org.opencontainers.image.base.name="docker.io/devkitpro/devkitppc:20260503"
 
 LABEL com.toygine2.console="Nintendo GameCube"
+LABEL com.toygine2.toolchain="devkitPPC"

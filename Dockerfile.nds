@@ -25,3 +25,4 @@ LABEL org.opencontainers.image.description="devkitARM toolchain for building Toy
 LABEL org.opencontainers.image.base.name="docker.io/devkitpro/devkitarm:20260610"
 
 LABEL com.toygine2.console="Nintendo DS"
+LABEL com.toygine2.toolchain="devkitARM"

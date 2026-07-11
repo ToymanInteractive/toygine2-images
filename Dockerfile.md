@@ -116,3 +116,4 @@ LABEL org.opencontainers.image.description="ClownMDSDK toolchain for building To
 LABEL org.opencontainers.image.base.name="docker.io/library/debian:bookworm-slim"
 
 LABEL com.toygine2.console="Sega Mega Drive/Genesis"
+LABEL com.toygine2.toolchain="ClownMDSDK"
