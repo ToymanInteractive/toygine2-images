@@ -1,4 +1,4 @@
-name: gba
+name: Build Nintendo Game Boy Advance toolchain
 
 on:
   push:

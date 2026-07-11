@@ -48,17 +48,17 @@ jobs:
           echo "sha=${latest}" >> "${GITHUB_OUTPUT}"
           echo "short=${latest:0:7}" >> "${GITHUB_OUTPUT}"
 
-      - name: Update Dockerfile.genesis
+      - name: Update Dockerfile.md
         id: update
         env:
           LATEST: ${{ steps.clownmdsdk.outputs.sha }}
         run: |
-          current=$(grep -oP '^ARG CLOWNMDSDK_COMMIT=\K[0-9a-f]+' Dockerfile.genesis) || {
-            echo "::error::Failed to extract CLOWNMDSDK_COMMIT from Dockerfile.genesis" >&2
+          current=$(grep -oP '^ARG CLOWNMDSDK_COMMIT=\K[0-9a-f]+' Dockerfile.md) || {
+            echo "::error::Failed to extract CLOWNMDSDK_COMMIT from Dockerfile.md" >&2
             exit 1
           }
           if [ -z "${current}" ]; then
-            echo "::error::CLOWNMDSDK_COMMIT not found in Dockerfile.genesis" >&2
+            echo "::error::CLOWNMDSDK_COMMIT not found in Dockerfile.md" >&2
             exit 1
           fi
           echo "current=${current}"
@@ -68,10 +68,10 @@ jobs:
             echo "Already up to date."
             exit 0
           fi
-          sed -i "s/^ARG CLOWNMDSDK_COMMIT=.*/ARG CLOWNMDSDK_COMMIT=${LATEST}/" Dockerfile.genesis
-          updated=$(grep -oP '^ARG CLOWNMDSDK_COMMIT=\K[0-9a-f]+' Dockerfile.genesis)
+          sed -i "s/^ARG CLOWNMDSDK_COMMIT=.*/ARG CLOWNMDSDK_COMMIT=${LATEST}/" Dockerfile.md
+          updated=$(grep -oP '^ARG CLOWNMDSDK_COMMIT=\K[0-9a-f]+' Dockerfile.md)
           if [ "${updated}" != "${LATEST}" ]; then
-            echo "::error::Failed to update CLOWNMDSDK_COMMIT in Dockerfile.genesis" >&2
+            echo "::error::Failed to update CLOWNMDSDK_COMMIT in Dockerfile.md" >&2
             exit 1
           fi
           echo "changed=true" >> "${GITHUB_OUTPUT}"
@@ -89,7 +89,7 @@ jobs:
           title: "chore(deps): bump ClownMDSDK to ${{ steps.clownmdsdk.outputs.short }}"
           assignees: dkrutskikh
           body: |
-            Automated weekly bump of the pinned ClownMDSDK commit in `Dockerfile.genesis`.
+            Automated weekly bump of the pinned ClownMDSDK commit in `Dockerfile.md`.
 
             - Repo: https://github.com/Clownacy/clownmdsdk
             - From: `${{ steps.update.outputs.current }}`

@@ -1,18 +1,18 @@
-name: genesis
+name: Build Sega Mega Drive/Genesis toolchain
 
 on:
   push:
     branches:
       - main
     paths:
-      - Dockerfile.genesis
-      - .github/workflows/build_genesis.yaml
+      - Dockerfile.md
+      - .github/workflows/build_md.yaml
   pull_request:
     branches:
       - main
     paths:
-      - Dockerfile.genesis
-      - .github/workflows/build_genesis.yaml
+      - Dockerfile.md
+      - .github/workflows/build_md.yaml
   workflow_dispatch:
 
 permissions:
@@ -25,6 +25,6 @@ jobs:
       packages: write
     uses: ./.github/workflows/_docker_build.yaml
     with:
-      image: genesis
+      image: md
       # ClownMDSDK toolchain (incl. GCC) is built from source; arm64 under QEMU needs extra time.
       timeout: 240

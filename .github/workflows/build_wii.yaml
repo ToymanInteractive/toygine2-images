@@ -1,4 +1,4 @@
-name: wii
+name: Build Nintendo Wii toolchain
 
 on:
   push:
