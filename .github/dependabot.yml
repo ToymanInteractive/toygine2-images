@@ -7,7 +7,6 @@ updates:
       interval: "daily"
 
     assignees:
-      - "dependabot"
       - "dkrutskikh"
 
     commit-message:
