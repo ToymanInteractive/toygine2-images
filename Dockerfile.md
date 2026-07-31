@@ -14,6 +14,9 @@
 #   docker run --rm -v "$PWD":/workspace -w /workspace toygine2-md \
 #       make -C path/to/project
 
+# Pinned toolchain versions (global ARGs so the final image can expose them as
+# metadata labels; CLOWNMDSDK_COMMIT is bumped like a dependency by the update workflow).
+ARG CLOWNMDSDK_COMMIT=47b426a04c1ea189e91b0acd15f425a1a3b839a3
 # --- Stage 1: ClownMDSDK toolchain builder ---
 FROM debian:bookworm-slim AS toolchain-builder
 
@@ -27,9 +30,11 @@ RUN apt-get update -qq && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Versions are pinned for reproducibility (bumped like dependencies).
-ARG CLOWNMDSDK_COMMIT=47b426a04c1ea189e91b0acd15f425a1a3b839a3
 ARG BINUTILS_VERSION=2.46.0
 ARG GCC_VERSION=16.1.0
+
+# Inherit the globally-pinned toolchain versions declared above.
+ARG CLOWNMDSDK_COMMIT
 
 # Archive sha256 (empty = check skipped; fill in when pinning versions).
 ARG BINUTILS_SHA256=
@@ -92,14 +97,12 @@ FROM debian:bookworm-slim
 # executable is linked against (it is a cross-compiler, but runs on the host).
 RUN apt-get update -qq && apt-get install -y --no-install-recommends \
     make cmake libgmp10 libmpfr6 libmpc3 libzstd1 \
-    && rm -rf /var/lib/apt/lists/* \
-    && useradd -ms /bin/bash builder
+    && rm -rf /var/lib/apt/lists/*
 
 COPY --from=toolchain-builder /opt/clownmdsdk /opt/clownmdsdk
 ENV PREFIX=/opt/clownmdsdk
 ENV PATH="${PREFIX}/bin:${PATH}"
 
-USER builder
 WORKDIR /workspace
 CMD ["bash"]
 
@@ -117,3 +120,7 @@ LABEL org.opencontainers.image.base.name="docker.io/library/debian:bookworm-slim
 
 LABEL com.toygine2.console="Sega Mega Drive/Genesis"
 LABEL com.toygine2.toolchain="ClownMDSDK"
+
+# Re-declare to bring the globally-pinned values into this stage for the labels below.
+ARG CLOWNMDSDK_COMMIT
+LABEL com.toygine2.sdk.clownmdsdk.commit="${CLOWNMDSDK_COMMIT}"
