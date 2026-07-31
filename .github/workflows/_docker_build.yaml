@@ -70,6 +70,17 @@ jobs:
             type=raw,value=latest
             type=raw,value={{date 'YYYYMMDD'}}
 
+      - name: Compute dynamic image labels
+        id: labels
+        # Only the build-time labels the Dockerfile can't know go here; static
+        # per-image labels (title/description/versions) live in each Dockerfile and
+        # must not be overridden by metadata-action's repo-level defaults.
+        run: |
+          {
+            echo "created=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "version=$(date -u +%Y%m%d)"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Build only
         if: ${{ github.ref != 'refs/heads/main' }}
         uses: docker/build-push-action@v7.3.0
@@ -92,6 +103,9 @@ jobs:
           provenance: false
           push: true
           tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          labels: |
+            org.opencontainers.image.created=${{ steps.labels.outputs.created }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ steps.labels.outputs.version }}
           cache-from: type=registry,ref=ghcr.io/toymaninteractive/toygine2.${{ inputs.image }}.toolchain:buildcache
           cache-to: type=registry,ref=ghcr.io/toymaninteractive/toygine2.${{ inputs.image }}.toolchain:buildcache,mode=max
