@@ -61,6 +61,19 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Compute build date
+        id: build_date
+        # One UTC date feeds both the date tag and the version label, so a build
+        # started just before midnight cannot tag 20260731 while labelling 20260801.
+        # Only build-time values the Dockerfile can't know go here; static per-image
+        # labels (title/description/versions) live in each Dockerfile and must not be
+        # overridden by metadata-action's repo-level defaults.
+        run: |
+          {
+            echo "created=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "version=$(date -u +%Y%m%d)"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Extract metadata
         id: meta
         uses: docker/metadata-action@v6.2.0
@@ -68,7 +81,7 @@ jobs:
           images: ghcr.io/toymaninteractive/toygine2.${{ inputs.image }}.toolchain
           tags: |
             type=raw,value=latest
-            type=raw,value={{date 'YYYYMMDD'}}
+            type=raw,value=${{ steps.build_date.outputs.version }}
 
       - name: Build only
         if: ${{ github.ref != 'refs/heads/main' }}
@@ -92,6 +105,9 @@ jobs:
           provenance: false
           push: true
           tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          labels: |
+            org.opencontainers.image.created=${{ steps.build_date.outputs.created }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ steps.build_date.outputs.version }}
           cache-from: type=registry,ref=ghcr.io/toymaninteractive/toygine2.${{ inputs.image }}.toolchain:buildcache
           cache-to: type=registry,ref=ghcr.io/toymaninteractive/toygine2.${{ inputs.image }}.toolchain:buildcache,mode=max
