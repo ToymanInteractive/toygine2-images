@@ -20,7 +20,7 @@ RUN apt-get update -qq && apt-get install -y --no-install-recommends \
      && rm -rf /var/lib/apt/lists/*
 
 # Versions are pinned for reproducibility (bumped like dependencies).
-ARG MGBA_COMMIT=c034660f007c543233f1cadeb0ca13c71afd8f41
+ARG MGBA_COMMIT=71aa6c7dab7654bfdbbd57e696f704671a97e55d
 
 # Step 0: Git clone and checkout.
 RUN mkdir -p /tmp/mgba \
