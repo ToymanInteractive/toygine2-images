@@ -17,6 +17,8 @@
 # Pinned toolchain versions (global ARGs so the final image can expose them as
 # metadata labels; CLOWNMDSDK_COMMIT is bumped like a dependency by the update workflow).
 ARG CLOWNMDSDK_COMMIT=47b426a04c1ea189e91b0acd15f425a1a3b839a3
+ARG GCC_VERSION=16.1.0
+
 # --- Stage 1: ClownMDSDK toolchain builder ---
 FROM debian:bookworm-slim AS toolchain-builder
 
@@ -31,10 +33,10 @@ RUN apt-get update -qq && apt-get install -y --no-install-recommends \
 
 # Versions are pinned for reproducibility (bumped like dependencies).
 ARG BINUTILS_VERSION=2.46.0
-ARG GCC_VERSION=16.1.0
 
 # Inherit the globally-pinned toolchain versions declared above.
 ARG CLOWNMDSDK_COMMIT
+ARG GCC_VERSION
 
 # Archive sha256 (empty = check skipped; fill in when pinning versions).
 ARG BINUTILS_SHA256=
@@ -93,10 +95,23 @@ RUN if [ "${SKIP_SMOKE_TEST}" != "1" ]; then \
 FROM debian:bookworm-slim
 
 # make — for Makefile projects (cartridge.mk/generic.mk); cmake — for toolchain.cmake;
-# libgmp10/libmpfr6/libmpc3/libzstd1 — shared libs that the host m68k-elf-g++
-# executable is linked against (it is a cross-compiler, but runs on the host).
-RUN apt-get update -qq && apt-get install -y --no-install-recommends \
-    make cmake libgmp10 libmpfr6 libmpc3 libzstd1 \
+# ninja-build — the consumer CMake presets use the Ninja generator; git + ca-certificates —
+# actions/checkout runs git from the image itself, without it checkout silently falls back to
+# the REST API tarball and 'submodules: recursive' becomes a hard error; curl/xz-utils/unzip —
+# CI steps fetch and unpack tools inside the job container; libgmp10/libmpfr6/libmpc3/libzstd1 —
+# shared libs that the host m68k-elf-g++ executable is linked against (it is a cross-compiler,
+# but runs on the host).
+#
+# cmake comes from bookworm-backports: bookworm/main ships 3.25.1 and toygine2 requires >= 3.27.
+# The builder stage keeps the older main cmake on purpose — newer CMake rejects the ancient
+# cmake_minimum_required of the AS and ClownLZSS sources built there.
+ARG DEBIAN_FRONTEND=noninteractive
+RUN echo "deb http://deb.debian.org/debian bookworm-backports main" \
+    > /etc/apt/sources.list.d/bookworm-backports.list \
+    && apt-get update -qq && apt-get install -y --no-install-recommends \
+    make ninja-build git ca-certificates curl xz-utils unzip \
+    libgmp10 libmpfr6 libmpc3 libzstd1 \
+    && apt-get install -y --no-install-recommends -t bookworm-backports cmake \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=toolchain-builder /opt/clownmdsdk /opt/clownmdsdk
@@ -123,4 +138,6 @@ LABEL com.toygine2.toolchain="ClownMDSDK"
 
 # Re-declare to bring the globally-pinned values into this stage for the labels below.
 ARG CLOWNMDSDK_COMMIT
+ARG GCC_VERSION
 LABEL com.toygine2.sdk.clownmdsdk.commit="${CLOWNMDSDK_COMMIT}"
+LABEL com.toygine2.sdk.gcc.version="${GCC_VERSION}"
