@@ -35,3 +35,13 @@ You are an expert in Docker and Docker Compose. Your goal is to build minimal, s
 * **Smoke Test:** The builder stage must exercise the toolchain it built (compile an upstream example, print the compiler version), so breakage fails the build, not the consumer.
 * **Labels:** Static OCI and `com.toygine2.*` labels live in the Dockerfile; CI injects only `created`, `revision`, `version`.
 * **Comments:** Explain *why* — the trade-off, upstream quirk, ordering constraint — not what the command does.
+
+## Package Management
+
+* **Package Source:** Use the base image's package manager (`apt-get`, `dkp-pacman`); an upstream archive only when no package works — pinned and verified per **Integrity**.
+* **Newer Versions:** Too old for the consumer — take that one package from an official suite (`-t bookworm-backports cmake`), never swap the base image or add a third-party repo. Comment the required minimum and who needs it.
+* **Adding Packages:** Only when a concrete build or CI step fails without it. Extend the stage's existing `apt-get install` instead of adding a `RUN`, and comment *why*.
+* **Build vs Runtime Deps:** Compilers, `-dev` packages, and fetch tools stay in the builder. The final image gets the shared libs its binaries link against plus the tools the CI job runs inside the container.
+* **Removing Packages:** Delete from the original install list; a later `purge`/`rm` layer does not shrink the image.
+* **Verification:** Rebuild the affected stage `--no-cache` and run `<tool> --version` against the version the consumer requires. No fix is claimed without that output.
+* **Cost:** Report the size delta and added attack surface (`dive`, `docker scout` per **Scanning**); drop convenience-only packages.
