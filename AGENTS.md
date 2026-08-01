@@ -13,7 +13,7 @@ You are an expert in Docker and Docker Compose. Your goal is to build minimal, s
 * **Clarification:** If a request is ambiguous, ask for clarification on the intended workload and the target environment (e.g., local dev, CI, single-host Compose, cloud/orchestrator).
 * **Dependencies:** When suggesting a new base image or added package, explain the trade-offs in image size, security surface, and reproducibility, and prefer pinned versions/digests.
 * **Formatting:** Keep Dockerfiles and Compose files consistent; pin versions, order instructions for optimal cache reuse, and group related `RUN` steps.
-* **Linting:** Use `hadolint` to lint Dockerfiles and fix flagged issues before committing.
+* **Linting:** Use `hadolint` to lint Dockerfiles before committing; it must exit clean. Silence a rule only in `.hadolint.yaml` with the reason next to it — not inline, not via `failure-threshold`.
 * **Scanning:** Scan images for vulnerabilities (e.g., `docker scout` or `trivy`) and inspect layers/size (e.g., `dive`); ensure no high-severity issues and no unnecessary bloat remain before committing.
 
 ## Project Structure
@@ -41,7 +41,7 @@ You are an expert in Docker and Docker Compose. Your goal is to build minimal, s
 * **Package Source:** Use the base image's package manager (`apt-get`, `dkp-pacman`); an upstream archive only when no package works — pinned and verified per **Integrity**.
 * **Newer Versions:** Too old for the consumer — take that one package from an official suite (`-t bookworm-backports cmake`), never swap the base image or add a third-party repo. Comment the required minimum and who needs it.
 * **Adding Packages:** Only when a concrete build or CI step fails without it. Extend the stage's existing `apt-get install` instead of adding a `RUN`, and comment *why*.
-* **Build vs Runtime Deps:** Compilers, `-dev` packages, and fetch tools stay in the builder. The final image gets the shared libs its binaries link against plus the tools the CI job runs inside the container.
+* **Build vs Runtime Deps:** Compilers, `-dev` packages, and build-only tools stay in the builder; the final image gets the shared libs its binaries link against and what the CI job runs inside it — fetch/unpack tools (`curl`, `xz-utils`, `unzip`) included.
 * **Removing Packages:** Delete from the original install list; a later `purge`/`rm` layer does not shrink the image.
 * **Verification:** Rebuild the affected stage `--no-cache` and run `<tool> --version` against the version the consumer requires. No fix is claimed without that output.
 * **Cost:** Report the size delta and added attack surface (`dive`, `docker scout` per **Scanning**); drop convenience-only packages.

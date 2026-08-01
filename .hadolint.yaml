@@ -1,0 +1,11 @@
+# hadolint config for the toygine2 toolchain images. Only rules that conflict with a
+# deliberate AGENTS.md decision are listed — everything else gets fixed, not ignored.
+ignored:
+  # DL3008 (pin apt versions): Debian main carries only the current version, so `pkg=version`
+  # stops resolving on the next security update; on devkitPro bases the versions are upstream's
+  # anyway. Reproducibility comes from the pinned base tag and pinned sources instead.
+  - DL3008
+
+  # DL3003 (WORKDIR instead of cd): build steps `cd` inside one RUN on purpose — WORKDIR is
+  # metadata that leaks into every later instruction, a step's directory dies with its layer.
+  - DL3003
