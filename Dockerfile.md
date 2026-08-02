@@ -45,8 +45,8 @@ ARG GCC_SHA256=
 # 1 = skip building example/ for the smoke test after install.
 ARG SKIP_SMOKE_TEST=0
 
-ENV PREFIX=/opt/clownmdsdk
-ENV PATH="${PREFIX}/bin:${PATH}"
+ENV CLOWNMDSDK=/opt/clownmdsdk
+ENV PATH="${CLOWNMDSDK}/bin:${PATH}"
 
 # Step 0: Git clone and checkout.
 RUN mkdir -p /tmp/clownmdsdk \
@@ -88,7 +88,7 @@ RUN cd /tmp/clownmdsdk/stage4 \
 # Smoke test: build the template cartridge with the freshly built toolchain.
 RUN if [ "${SKIP_SMOKE_TEST}" != "1" ]; then \
     make -C /tmp/clownmdsdk/example/template-cartridge -j"$(nproc)" \
-    && "${PREFIX}/bin/m68k-elf-g++" --version; \
+    && "${CLOWNMDSDK}/bin/m68k-elf-g++" --version; \
     fi
 
 # --- Stage 2: final image ---
@@ -115,8 +115,10 @@ RUN echo "deb http://deb.debian.org/debian bookworm-backports main" \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=toolchain-builder /opt/clownmdsdk /opt/clownmdsdk
-ENV PREFIX=/opt/clownmdsdk
-ENV PATH="${PREFIX}/bin:${PATH}"
+
+ENV LANG=C.UTF-8
+ENV CLOWNMDSDK=/opt/clownmdsdk
+ENV PATH="${CLOWNMDSDK}/bin:${PATH}"
 
 WORKDIR /workspace
 CMD ["bash"]
