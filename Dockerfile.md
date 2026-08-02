@@ -45,8 +45,6 @@ ARG GCC_SHA256=
 # 1 = skip building example/ for the smoke test after install.
 ARG SKIP_SMOKE_TEST=0
 
-ENV LANG=en_US.UTF-8
-
 ENV CLOWNMDSDK=/opt/clownmdsdk
 ENV PATH="${CLOWNMDSDK}/bin:${PATH}"
 
@@ -118,8 +116,7 @@ RUN echo "deb http://deb.debian.org/debian bookworm-backports main" \
 
 COPY --from=toolchain-builder /opt/clownmdsdk /opt/clownmdsdk
 
-ENV LANG=en_US.UTF-8
-
+ENV LANG=C.UTF-8
 ENV CLOWNMDSDK=/opt/clownmdsdk
 ENV PATH="${CLOWNMDSDK}/bin:${PATH}"
 

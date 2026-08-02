@@ -45,3 +45,15 @@ You are an expert in Docker and Docker Compose. Your goal is to build minimal, s
 * **Removing Packages:** Delete from the original install list; a later `purge`/`rm` layer does not shrink the image.
 * **Verification:** Rebuild the affected stage `--no-cache` and run `<tool> --version` against the version the consumer requires. No fix is claimed without that output.
 * **Cost:** Report the size delta and added attack surface (`dive`, `docker scout` per **Scanning**); drop convenience-only packages.
+
+## Code Quality
+
+* **Separation of Concerns:** One responsibility per stage — toolchain in the builder, runtime payload in the final image (**Multi-Stage Builds**). Split a stage that does both.
+* **RUN Granularity:** One logical step per `RUN` — fetch, build+install, its own cleanup — chained with `&&`, wrapped with `\`. Cleanup never moves to the next `RUN` (**Layer Hygiene**).
+* **Naming:** `SCREAMING_SNAKE_CASE` for `ARG`/`ENV`, lowercase-hyphen for stages, `Dockerfile.<target>` for files. Namespace runtime `ENV` by its SDK (`CLOWNMDSDK`, `DEVKITPRO`) — generic `PREFIX`/`CC`/`TARGET` leak into mounted consumer builds.
+* **Conciseness:** The shortest instruction that stays clear. Never re-set what the base image provides, or add an `ARG` with one possible value.
+* **Simplicity:** Plain shell. Clever quoting, nested subshells, and generated scripts are unreviewable inside a layer — that much logic belongs upstream.
+* **Error Handling:** Fail loudly — `&&` (never `;`), `pipefail` (**Shell Safety**), `curl -fSL --retry`, `sha256sum -c` (**Integrity**). No `|| true`, no `/dev/null` hiding a failure.
+* **Styling:** Instructions UPPERCASE; wrap at 100 columns except URLs and `LABEL` values; long package lists one per line in a stable order.
+* **Testing:** Prove the image in-build (**Smoke Test**) — compile something real, print the version. A `SKIP_SMOKE_TEST` `ARG` only where the test dominates build time.
+* **Build Output:** Signal only — `apt-get -qq`, `curl -fSL` not `-#`, no `echo` narration. The failing step's stderr is the log.
