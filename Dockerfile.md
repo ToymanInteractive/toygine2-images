@@ -16,7 +16,7 @@
 
 # Pinned toolchain versions (global ARGs so the final image can expose them as
 # metadata labels; CLOWNMDSDK_COMMIT is bumped like a dependency by the update workflow).
-ARG CLOWNMDSDK_COMMIT=47b426a04c1ea189e91b0acd15f425a1a3b839a3
+ARG CLOWNMDSDK_COMMIT=7bc06af715c86956dbac37252eb67033740bcc0f
 ARG GCC_VERSION=16.1.0
 
 # --- Stage 1: ClownMDSDK toolchain builder ---
