@@ -32,7 +32,7 @@ RUN apt-get update -qq && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Versions are pinned for reproducibility (bumped like dependencies).
-ARG BINUTILS_VERSION=2.47.0
+ARG BINUTILS_VERSION=2.47
 
 # Inherit the globally-pinned toolchain versions declared above.
 ARG CLOWNMDSDK_COMMIT
