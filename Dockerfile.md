@@ -16,8 +16,8 @@
 
 # Pinned toolchain versions (global ARGs so the final image can expose them as
 # metadata labels; CLOWNMDSDK_COMMIT is bumped like a dependency by the update workflow).
-ARG CLOWNMDSDK_COMMIT=47b426a04c1ea189e91b0acd15f425a1a3b839a3
-ARG GCC_VERSION=16.1.0
+ARG CLOWNMDSDK_COMMIT=7bc06af715c86956dbac37252eb67033740bcc0f
+ARG GCC_VERSION=16.2.0
 
 # --- Stage 1: ClownMDSDK toolchain builder ---
 FROM debian:bookworm-slim AS toolchain-builder
@@ -32,7 +32,7 @@ RUN apt-get update -qq && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Versions are pinned for reproducibility (bumped like dependencies).
-ARG BINUTILS_VERSION=2.46.0
+ARG BINUTILS_VERSION=2.47
 
 # Inherit the globally-pinned toolchain versions declared above.
 ARG CLOWNMDSDK_COMMIT
