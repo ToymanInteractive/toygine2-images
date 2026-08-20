@@ -50,7 +50,7 @@ jobs:
           platforms: arm64
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4.2.0
+        uses: docker/setup-buildx-action@v4.3.0
 
       - name: Log in to GHCR
         # Forked-PR runs have no access to secrets; skip login there (cache reads may miss, but the build still validates). Always logs in for push/dispatch.
