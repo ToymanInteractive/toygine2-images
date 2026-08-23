@@ -7,12 +7,14 @@ on:
     paths:
       - Dockerfile.gc
       - .github/workflows/build_gc.yaml
+      - .github/workflows/_docker_build.yaml
   pull_request:
     branches:
       - main
     paths:
       - Dockerfile.gc
       - .github/workflows/build_gc.yaml
+      - .github/workflows/_docker_build.yaml
   workflow_dispatch:
 
 permissions:
