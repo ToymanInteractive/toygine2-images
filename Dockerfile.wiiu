@@ -2,7 +2,7 @@
 #
 # Thin wrapper over the upstream devkitpro/devkitppc image: pinned to a specific date
 # tag and annotated with OCI labels for the toygine2 CI/registry. No extra tooling is
-# added — devkitPro already ships the cross-compiler and platform libraries (libogc)
+# added — devkitPro already ships the cross-compiler and platform libraries (wut)
 # used by ToyGine2's Makefiles.
 #
 # Usage (same as the other toygine2 images):
