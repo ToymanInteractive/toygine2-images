@@ -1,0 +1,28 @@
+name: Build Nintendo Wii U toolchain
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - Dockerfile.wiiu
+      - .github/workflows/build_wiiu.yaml
+  pull_request:
+    branches:
+      - main
+    paths:
+      - Dockerfile.wiiu
+      - .github/workflows/build_wiiu.yaml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/_docker_build.yaml
+    with:
+      image: wiiu
