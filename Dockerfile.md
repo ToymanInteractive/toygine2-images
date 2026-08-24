@@ -10,7 +10,7 @@
 # by the runtime stage.
 #
 # Usage (same as the other toygine2 images):
-#   docker build -t toygine2-md -f Dockerfile.md .
+#   docker build -t toygine2-md - < Dockerfile.md
 #   docker run --rm -v "$PWD":/workspace -w /workspace toygine2-md \
 #       make -C path/to/project
 
