@@ -46,7 +46,7 @@ jobs:
           persist-credentials: false
 
       - name: Check base image matches its label
-        # Dependabot rewrites the FROM tag and leaves org.opencontainers.image.base.name untouched;
+        # Dependabot rewrites the FROM tag and leaves org.opencontainers.image.base.name untouched.
         # This step runs before the QEMU and buildx setup so a mismatch fails in seconds instead of after a full emulated build.
         env:
           IMAGE: ${{ inputs.image }}
@@ -54,6 +54,9 @@ jobs:
           dockerfile="Dockerfile.$IMAGE"
           from=$(grep '^FROM ' "$dockerfile" | tail -1 | awk '{print $2}')
           label=$(grep -o 'image.base.name="[^"]*"' "$dockerfile" | cut -d'"' -f2)
+          # Both sides are normalized: docker.io/library/debian:x and debian:x name one image, so only a real tag difference may fail the step.
+          from=${from#docker.io/}
+          from=${from#library/}
           label=${label#docker.io/}
           label=${label#library/}
           if [ "$from" != "$label" ]; then
