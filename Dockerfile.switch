@@ -6,7 +6,7 @@
 # used by ToyGine2's Makefiles.
 #
 # Usage (same as the other toygine2 images):
-#   docker build -t toygine2-switch -f Dockerfile.switch .
+#   docker build -t toygine2-switch - < Dockerfile.switch
 #   docker run --rm -v "$PWD":/workspace -w /workspace toygine2-switch \
 #       make -C path/to/project
 

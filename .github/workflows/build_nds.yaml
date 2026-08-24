@@ -7,12 +7,14 @@ on:
     paths:
       - Dockerfile.nds
       - .github/workflows/build_nds.yaml
+      - .github/workflows/_docker_build.yaml
   pull_request:
     branches:
       - main
     paths:
       - Dockerfile.nds
       - .github/workflows/build_nds.yaml
+      - .github/workflows/_docker_build.yaml
   workflow_dispatch:
 
 permissions:

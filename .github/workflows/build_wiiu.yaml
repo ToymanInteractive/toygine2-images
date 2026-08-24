@@ -1,19 +1,19 @@
-name: Build Nintendo GameCube toolchain
+name: Build Nintendo Wii U toolchain
 
 on:
   push:
     branches:
       - main
     paths:
-      - Dockerfile.gc
-      - .github/workflows/build_gc.yaml
+      - Dockerfile.wiiu
+      - .github/workflows/build_wiiu.yaml
       - .github/workflows/_docker_build.yaml
   pull_request:
     branches:
       - main
     paths:
-      - Dockerfile.gc
-      - .github/workflows/build_gc.yaml
+      - Dockerfile.wiiu
+      - .github/workflows/build_wiiu.yaml
       - .github/workflows/_docker_build.yaml
   workflow_dispatch:
 
@@ -27,4 +27,4 @@ jobs:
       packages: write
     uses: ./.github/workflows/_docker_build.yaml
     with:
-      image: gc
+      image: wiiu

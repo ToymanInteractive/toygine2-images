@@ -6,7 +6,7 @@
 # copied into /usr/local/bin for ROM smoke-tests.
 #
 # Usage (same as the other toygine2 images):
-#   docker build -t toygine2-gba -f Dockerfile.gba .
+#   docker build -t toygine2-gba - < Dockerfile.gba
 #   docker run --rm -v "$PWD":/workspace -w /workspace toygine2-gba \
 #       make -C path/to/project
 

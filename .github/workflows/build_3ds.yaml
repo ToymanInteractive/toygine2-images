@@ -7,12 +7,14 @@ on:
     paths:
       - Dockerfile.3ds
       - .github/workflows/build_3ds.yaml
+      - .github/workflows/_docker_build.yaml
   pull_request:
     branches:
       - main
     paths:
       - Dockerfile.3ds
       - .github/workflows/build_3ds.yaml
+      - .github/workflows/_docker_build.yaml
   workflow_dispatch:
 
 permissions:
