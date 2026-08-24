@@ -6,7 +6,7 @@
 # used by ToyGine2's Makefiles.
 #
 # Usage (same as the other toygine2 images):
-#   docker build -t toygine2-gc -f Dockerfile.gc .
+#   docker build -t toygine2-gc - < Dockerfile.gc
 #   docker run --rm -v "$PWD":/workspace -w /workspace toygine2-gc \
 #       make -C path/to/project
 

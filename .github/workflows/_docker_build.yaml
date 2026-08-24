@@ -1,7 +1,8 @@
 name: Build Docker image
 
 # Reusable build/publish logic shared by the per-image build_<image>.yaml workflows.
-# Each caller triggers only on its own Dockerfile, so unrelated images are not rebuilt.
+# Each caller triggers on its own Dockerfile and on this file, so editing one Dockerfile
+# rebuilds only that image, while a change here rebuilds all of them.
 on:
   workflow_call:
     inputs:
@@ -43,6 +44,22 @@ jobs:
         uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
+
+      - name: Check base image matches its label
+        # Dependabot rewrites the FROM tag and leaves org.opencontainers.image.base.name untouched;
+        # This step runs before the QEMU and buildx setup so a mismatch fails in seconds instead of after a full emulated build.
+        env:
+          IMAGE: ${{ inputs.image }}
+        run: |
+          dockerfile="Dockerfile.$IMAGE"
+          from=$(grep '^FROM ' "$dockerfile" | tail -1 | awk '{print $2}')
+          label=$(grep -o 'image.base.name="[^"]*"' "$dockerfile" | cut -d'"' -f2)
+          label=${label#docker.io/}
+          label=${label#library/}
+          if [ "$from" != "$label" ]; then
+            echo "::error file=$dockerfile::FROM $from does not match base.name label $label"
+            exit 1
+          fi
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v4.2.0
