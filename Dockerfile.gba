@@ -12,7 +12,7 @@
 
 # Pinned mGBA commit (global ARG so both the builder stage and the final image's
 # metadata label reference one source of truth; bumped like a dependency).
-ARG MGBA_COMMIT=cc94070a8910ecb8c1d10c515e913a4599223a31
+ARG MGBA_COMMIT=c65e8a3d4666b0ea68a01578232452f31b185332
 
 # --- Stage 1: mGBA builder ---
 FROM devkitpro/devkitarm:20260610 AS mgba-builder
