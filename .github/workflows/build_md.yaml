@@ -28,5 +28,6 @@ jobs:
     uses: ./.github/workflows/_docker_build.yaml
     with:
       image: md
-      # ClownMDSDK toolchain (incl. GCC) is built from source; arm64 under QEMU needs extra time.
-      timeout: 240
+      # ClownMDSDK toolchain (incl. GCC) and BlastEm are built from source; arm64 under QEMU needs extra time.
+      # A cold build already took ~233 min before BlastEm, so the timeout is at the hosted-runner maximum.
+      timeout: 360

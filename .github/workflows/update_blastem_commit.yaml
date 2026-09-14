@@ -1,0 +1,92 @@
+name: Update BlastEm commit
+
+on:
+  schedule:
+    # Weekly on Saturday 01:00 UTC
+    - cron: "0 1 * * 6"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  update:
+    concurrency:
+      group: update-blastem-commit
+      cancel-in-progress: false
+    name: Bump BlastEm commit
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Resolve latest BlastEm default branch changeset
+        id: blastem
+        # Upstream is a Mercurial repo on hgweb with the JSON API disabled; the raw patch of the
+        # default branch head carries the full node id in its header.
+        run: |
+          patch=$(curl -fsSL --retry 3 https://www.retrodev.com/repos/blastem/raw-rev/default)
+          latest=$(grep -m1 -oP '^# Node ID \K[0-9a-f]{40}$' <<< "${patch}") || {
+            echo "::error::Failed to resolve latest BlastEm default branch changeset" >&2
+            exit 1
+          }
+          echo "sha=${latest}" >> "${GITHUB_OUTPUT}"
+          echo "short=${latest:0:12}" >> "${GITHUB_OUTPUT}"
+
+      - name: Update Dockerfile.md
+        id: update
+        env:
+          LATEST: ${{ steps.blastem.outputs.sha }}
+        run: |
+          current=$(grep -oP '^ARG BLASTEM_COMMIT=\K[0-9a-f]+' Dockerfile.md) || {
+            echo "::error::Failed to extract BLASTEM_COMMIT from Dockerfile.md" >&2
+            exit 1
+          }
+          if [ -z "${current}" ]; then
+            echo "::error::BLASTEM_COMMIT not found in Dockerfile.md" >&2
+            exit 1
+          fi
+          echo "current=${current}"
+          echo "latest=${LATEST}"
+          if [ "${current}" = "${LATEST}" ]; then
+            echo "changed=false" >> "${GITHUB_OUTPUT}"
+            echo "Already up to date."
+            exit 0
+          fi
+          sed -i "s/^ARG BLASTEM_COMMIT=.*/ARG BLASTEM_COMMIT=${LATEST}/" Dockerfile.md
+          updated=$(grep -oP '^ARG BLASTEM_COMMIT=\K[0-9a-f]+' Dockerfile.md)
+          if [ "${updated}" != "${LATEST}" ]; then
+            echo "::error::Failed to update BLASTEM_COMMIT in Dockerfile.md" >&2
+            exit 1
+          fi
+          echo "changed=true" >> "${GITHUB_OUTPUT}"
+          echo "current=${current}" >> "${GITHUB_OUTPUT}"
+
+      - name: Create Pull Request
+        if: steps.update.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@v8.1.1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          sign-commits: true
+          branch: chore/bump-blastem-commit
+          delete-branch: true
+          commit-message: "chore(deps): bump BlastEm to ${{ steps.blastem.outputs.short }}"
+          title: "chore(deps): bump BlastEm to ${{ steps.blastem.outputs.short }}"
+          assignees: dkrutskikh
+          body: |
+            Automated weekly bump of the pinned BlastEm changeset in `Dockerfile.md`.
+
+            - Repo: https://www.retrodev.com/repos/blastem
+            - From: `${{ steps.update.outputs.current }}`
+            - To: `${{ steps.blastem.outputs.sha }}` (default branch head)
+            - Changes: https://www.retrodev.com/repos/blastem/log?rev=${{ steps.update.outputs.current }}::${{ steps.blastem.outputs.sha }}
