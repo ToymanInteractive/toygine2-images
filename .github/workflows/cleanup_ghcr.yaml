@@ -45,7 +45,7 @@ jobs:
           image-tags: "!latest !buildcache"
           # Clean orphaned untagged manifests too; multi-arch children of kept tags are protected automatically since v3.1.0.
           tag-selection: both
-          # Grace period: never touch anything younger than a day (e.g. a build that just published). Retention is governed by keep-n-most-recent.
+          # Grace period: skip anything younger than a day, such as a build that just published. keep-n-most-recent sets the retention.
           cut-off: 1d
           # Keep the 10 most recent dated (YYYYMMDD) tags; prune older ones.
           keep-n-most-recent: 10
