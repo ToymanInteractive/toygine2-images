@@ -28,8 +28,16 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # Every image published by a build_<image>.yaml caller; add new targets here too.
         include:
+          - image: 3ds
           - image: gba
+          - image: gc
+          - image: md
+          - image: nds
+          - image: switch
+          - image: wii
+          - image: wiiu
     defaults:
       run:
         shell: bash
