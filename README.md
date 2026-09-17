@@ -25,12 +25,12 @@ docker run --rm -v "$PWD":/workspace -w /workspace \
 
 The image also includes a headless [mGBA](https://mgba.io/) build for running ROMs in CI. `mgba-headless` is installed in `/usr/local/bin`, which is already on `PATH`.
 
-The [emibios](https://github.com/coolbho3k/emibios) GBA BIOS replacement sits next to the emulator as `/usr/local/bin/gba_bios.bin`. Unlike the retail BIOS, it can be redistributed (LGPL-3.0-or-later). Pass it with `-b`. mGBA logs `BIOS checksum incorrect` because it compares against the retail BIOS; emulation still runs normally:
+The [emibios](https://github.com/coolbho3k/emibios) GBA BIOS replacement is installed as `/usr/local/share/emibios/gba_bios.bin`. Unlike the retail BIOS, it can be redistributed (LGPL-3.0-or-later). Pass it with `-b`. mGBA logs `BIOS checksum incorrect` because it compares against the retail BIOS; emulation still runs normally:
 
 ```sh
 docker run --rm -v "$PWD":/workspace -w /workspace \
     ghcr.io/toymaninteractive/toygine2.gba.toolchain:latest \
-    mgba-headless -b /usr/local/bin/gba_bios.bin build/rom.gba
+    mgba-headless -b /usr/local/share/emibios/gba_bios.bin build/rom.gba
 ```
 
 ### Genesis (Sega Mega Drive/Genesis)
