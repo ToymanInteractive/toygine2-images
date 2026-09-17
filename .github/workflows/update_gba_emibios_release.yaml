@@ -65,9 +65,13 @@ jobs:
             echo "::error::Failed to extract EMIBIOS_VERSION from Dockerfile.gba" >&2
             exit 1
           }
-          echo "current=${current}"
-          echo "latest=${LATEST}"
-          if [ "${current}" = "${LATEST}" ]; then
+          current_sha256=$(grep -oP '^ARG EMIBIOS_SHA256=\K[0-9a-f]*' Dockerfile.gba) || {
+            echo "::error::Failed to extract EMIBIOS_SHA256 from Dockerfile.gba" >&2
+            exit 1
+          }
+          echo "current=${current} (${current_sha256})"
+          echo "latest=${LATEST} (${LATEST_SHA256})"
+          if [ "${current}" = "${LATEST}" ] && [ "${current_sha256}" = "${LATEST_SHA256}" ]; then
             echo "changed=false" >> "${GITHUB_OUTPUT}"
             echo "Already up to date."
             exit 0
