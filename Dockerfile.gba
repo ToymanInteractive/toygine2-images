@@ -5,6 +5,9 @@
 # image is the upstream devkitARM toolchain with the mgba-headless binary copied into
 # /usr/local/bin for ROM smoke tests.
 #
+# Stage 2 downloads emibios, a redistributable GBA BIOS replacement. It ships next to the emulator
+# as /usr/local/bin/gba_bios.bin for `mgba-headless -b`.
+#
 # Usage (same as the other toygine2 images):
 #   docker build -t toygine2-gba - < Dockerfile.gba
 #   docker run --rm -v "$PWD":/workspace -w /workspace toygine2-gba \
@@ -13,6 +16,10 @@
 # Pinned mGBA commit. It is a global ARG so the builder stage and the final image's metadata
 # label read the same value; the update workflow bumps it like a dependency.
 ARG MGBA_COMMIT=543a197582c30364584d773a974d7f991892fa43
+
+# Pinned emibios release and the sha256 of its gba_bios.bin; the update workflow bumps both.
+ARG EMIBIOS_VERSION=0.1.4
+ARG EMIBIOS_SHA256=e8165a767dd0e02599e181044bba4556fdfa36b1bd049322f01b7aeb7cb0313a
 
 # --- Stage 1: mGBA builder ---
 FROM devkitpro/devkitarm:20260610 AS mgba-builder
@@ -51,10 +58,27 @@ RUN cmake -S /tmp/mgba -B /tmp/mgba/build \
 # Smoke test: the emulator that was just built must run.
 RUN /tmp/mgba/build/mgba-headless --version placeholder.gba
 
-# --- Stage 2: final image ---
+# --- Stage 2: emibios fetch ---
+# Prebuilt release: a source build needs unpackaged Zig 0.16, and the BIOS is arch-independent.
+FROM devkitpro/devkitarm:20260610 AS emibios-fetch
+
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
+# Inherit the globally pinned emibios release declared above.
+ARG EMIBIOS_VERSION
+ARG EMIBIOS_SHA256
+
+RUN mkdir -p /tmp/emibios \
+    && cd /tmp/emibios \
+    && curl -fSL --retry 3 -o gba_bios.bin \
+    "https://github.com/coolbho3k/emibios/releases/download/${EMIBIOS_VERSION}/gba_bios.bin" \
+    && { [ -z "${EMIBIOS_SHA256}" ] || echo "${EMIBIOS_SHA256}  gba_bios.bin" | sha256sum -c -; }
+
+# --- Stage 3: final image ---
 FROM devkitpro/devkitarm:20260610
 
 COPY --from=mgba-builder /tmp/mgba/build/mgba-headless /usr/local/bin/mgba-headless
+COPY --from=emibios-fetch /tmp/emibios/gba_bios.bin /usr/local/bin/gba_bios.bin
 
 LABEL org.opencontainers.image.authors="Toyman Interactive <https://github.com/ToymanInteractive>"
 LABEL org.opencontainers.image.url="https://github.com/ToymanInteractive/toygine2-images"
@@ -71,6 +95,8 @@ LABEL org.opencontainers.image.base.name="docker.io/devkitpro/devkitarm:20260610
 LABEL com.toygine2.console="Nintendo Game Boy Advance"
 LABEL com.toygine2.toolchain="devkitARM"
 
-# Re-declare to bring the globally pinned value into this stage for the label below.
+# Re-declare to bring the globally pinned values into this stage for the labels below.
 ARG MGBA_COMMIT
+ARG EMIBIOS_VERSION
 LABEL com.toygine2.sdk.mgba.commit="${MGBA_COMMIT}"
+LABEL com.toygine2.sdk.emibios.version="${EMIBIOS_VERSION}"
