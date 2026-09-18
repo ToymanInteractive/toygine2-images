@@ -24,7 +24,7 @@ You are an expert in Docker and Docker Compose. Your goal is to build minimal, s
 
 * **Multi-Stage Builds:** Build toolchains in a builder stage; the final stage only `COPY --from=` the installed prefix. No build trees, source archives, or compilers in the published image.
 * **Pinning:** Pin base images by tag and upstream sources by commit SHA or version, as `ARG`s before the first `FROM` (one source of truth for the build and the labels), re-declared bare in each consuming stage.
-* **Integrity:** Verify downloaded archives with `sha256sum -c` when a checksum `ARG` is set. An empty checksum skips the check; a mismatch always fails.
+* **Integrity:** Verify downloaded archives with `sha256sum -c` when a checksum `ARG` is set. An empty checksum skips the check; a mismatch always fails. A commit-pinned upstream script downloads its own archives — that commit is their pin.
 * **Layer Caching:** Order slowest-changing first — package installs, pinned `ARG`s, source fetch, build. Never put a frequently bumped `ARG` above `apt-get install`.
 * **Layer Hygiene:** One `RUN` per build step, cleanup in the same layer (`rm -rf /var/lib/apt/lists/*`, archives, build dirs) — deleting later does not shrink the image.
 * **Packages:** `apt-get update -qq && apt-get install -y --no-install-recommends` in a single `RUN`; comment why non-obvious packages are needed.
