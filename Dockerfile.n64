@@ -47,21 +47,21 @@ ENV BUILD_PATH=/tmp/toolchain
 ENV DOWNLOAD_PATH=/tmp/toolchain-sources
 ENV PATH="${N64_INST}/bin:${PATH}"
 
-# Step 0: Git clone and checkout.
+# binutils, GCC and newlib for mips64-elf, the longest part of the build.
+# The clone sits in the same layer as the build, so its 120 MB go when the rm below runs. In a
+# layer of its own it would stay in the exported buildcache, wherever it was deleted.
+# The script downloads the source archives itself, without checksums, and takes their versions
+# from the pinned script commit. It tees its log into BUILD_PATH before creating that directory,
+# so this step creates it first. Locales are removed because the whole prefix goes into the final
+# image and CI reads English diagnostics.
 RUN mkdir -p /tmp/libdragon-toolchain \
     && cd /tmp/libdragon-toolchain \
     && git init -q \
     && git remote add origin https://github.com/DragonMinded/libdragon.git \
     && git fetch --depth 1 origin "${LIBDRAGON_TOOLCHAIN_COMMIT}" \
-    && git checkout -q --detach FETCH_HEAD
-
-# Step 1: binutils, GCC and newlib for mips64-elf, the longest step.
-# The script downloads the source archives itself, without checksums, and takes their versions
-# from the pinned script commit. It tees its log into BUILD_PATH before creating that directory,
-# so this step creates it first. Locales are removed because the whole prefix goes into the final
-# image and CI reads English diagnostics.
-RUN mkdir -p "${BUILD_PATH}" "${DOWNLOAD_PATH}" \
-    && bash /tmp/libdragon-toolchain/tools/build-toolchain.sh \
+    && git checkout -q --detach FETCH_HEAD \
+    && mkdir -p "${BUILD_PATH}" "${DOWNLOAD_PATH}" \
+    && bash tools/build-toolchain.sh \
     && rm -rf "${BUILD_PATH}" "${DOWNLOAD_PATH}" /tmp/libdragon-toolchain "${N64_INST}"/share/locale/*
 
 # --- Stage 2: libdragon library and host tools builder ---
@@ -75,24 +75,23 @@ ARG LIBDRAGON_COMMIT
 # 1 = skip building the C++ example after install.
 ARG SKIP_SMOKE_TEST=0
 
-# Step 0: Git clone and checkout.
+# libdragon.a, the headers, n64.mk and the host tools, installed into N64_INST.
+# build.sh is upstream's own entry point; --no-examples leaves the examples to the smoke test.
+# That test builds cpptest, the upstream C++ example, because ToyGine2 is written in C++.
+# Clone, build and smoke test share one layer: the test needs the examples, so the tree can only
+# be deleted once it has run.
 RUN mkdir -p /tmp/libdragon \
     && cd /tmp/libdragon \
     && git init -q \
     && git remote add origin https://github.com/DragonMinded/libdragon.git \
     && git fetch --depth 1 origin "${LIBDRAGON_COMMIT}" \
-    && git checkout -q --detach FETCH_HEAD
-
-# Step 1: libdragon.a, the headers, n64.mk and the host tools, installed into N64_INST.
-# build.sh is upstream's own entry point; --no-examples leaves the examples to the smoke test.
-RUN cd /tmp/libdragon && ./build.sh --no-examples
-
-# Smoke test: build a C++ ROM with the freshly installed toolchain and library. cpptest is the
-# upstream C++ example, and ToyGine2 is written in C++.
-RUN if [ "${SKIP_SMOKE_TEST}" != "1" ]; then \
-    make -C /tmp/libdragon/examples/cpptest -j"$(nproc)" \
+    && git checkout -q --detach FETCH_HEAD \
+    && ./build.sh --no-examples \
+    && if [ "${SKIP_SMOKE_TEST}" != "1" ]; then \
+    make -C examples/cpptest -j"$(nproc)" \
     && mips64-elf-g++ --version; \
-    fi
+    fi \
+    && rm -rf /tmp/libdragon
 
 # --- Stage 3: final image ---
 FROM debian:trixie-slim
