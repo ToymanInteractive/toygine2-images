@@ -213,24 +213,25 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract metadata
-        id: meta
-        uses: docker/metadata-action@v6.2.0
-        with:
-          images: ghcr.io/toymaninteractive/toygine2.${{ inputs.image }}.toolchain
-          tags: |
-            type=raw,value=latest
-            type=raw,value=${{ needs.prepare.outputs.version }}
-
       - name: Create manifest list and push
         working-directory: /tmp/digests
         env:
           IMAGE: ghcr.io/toymaninteractive/toygine2.${{ inputs.image }}.toolchain
+          VERSION: ${{ needs.prepare.outputs.version }}
+          GH_TOKEN: ${{ github.token }}
         run: |
+          # Actions does not order pending jobs in a concurrency group by commit, so an older run
+          # can publish after a newer one. The dated tag belongs to this run; latest moves only
+          # while main still points at this commit, so a late finisher cannot roll consumers back.
+          tags=(-t "${IMAGE}:${VERSION}")
+          head=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq '.object.sha')
+          if [ "$head" = "$GITHUB_SHA" ]; then
+            tags+=(-t "${IMAGE}:latest")
+          else
+            echo "::warning::main moved to $head since $GITHUB_SHA; publishing $VERSION without latest"
+          fi
           # Each downloaded file is named after a digest and is empty on purpose.
-          docker buildx imagetools create \
-            $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
-            $(printf "${IMAGE}@sha256:%s " *)
+          docker buildx imagetools create "${tags[@]}" $(printf "${IMAGE}@sha256:%s " *)
 
       - name: Inspect manifest
         env:
