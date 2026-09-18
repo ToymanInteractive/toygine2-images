@@ -65,12 +65,12 @@ jobs:
           fi
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v4.3.0
+        uses: docker/setup-qemu-action@v4.4.0
         with:
           platforms: arm64
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4.3.0
+        uses: docker/setup-buildx-action@v4.4.0
 
       - name: Log in to GHCR
         # Forked-PR runs have no access to secrets, so login is skipped there; cache reads may miss, but the build still validates. Push and dispatch runs always log in.
@@ -105,7 +105,7 @@ jobs:
 
       - name: Build only
         if: ${{ github.ref != 'refs/heads/main' }}
-        uses: docker/build-push-action@v7.3.0
+        uses: docker/build-push-action@v7.4.0
         with:
           context: .
           file: Dockerfile.${{ inputs.image }}
@@ -117,7 +117,7 @@ jobs:
 
       - name: Build and push
         if: ${{ github.ref == 'refs/heads/main' }}
-        uses: docker/build-push-action@v7.3.0
+        uses: docker/build-push-action@v7.4.0
         with:
           context: .
           file: Dockerfile.${{ inputs.image }}
