@@ -61,12 +61,9 @@ jobs:
 
       - name: Compute build date
         id: build_date
-        # One UTC date feeds the date tag and the version label of both platforms.
-        run: |
-          {
-            echo "created=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-            echo "version=$(date -u +%Y%m%d)"
-          } >> "$GITHUB_OUTPUT"
+        # Two date calls can straddle midnight and label the image one day while tagging it
+        # the next.
+        run: date -u +'created=%Y-%m-%dT%H:%M:%SZ%nversion=%Y%m%d' >> "$GITHUB_OUTPUT"
 
   build:
     needs: prepare
@@ -175,6 +172,13 @@ jobs:
           retention-days: 1
 
   merge:
+    concurrency:
+      # Serializes publication per image: two runs on main must not write latest and the dated
+      # tag at once. queue: max makes a superseded run wait rather than cancel, so its dated tag
+      # still gets published.
+      group: docker-publish-${{ inputs.image }}
+      cancel-in-progress: false
+      queue: max
     needs:
       - prepare
       - build

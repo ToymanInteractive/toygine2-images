@@ -104,7 +104,7 @@ SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 # mercurial: upstream is a Mercurial repo with no git mirror; python3: cpu_dsl.py generates the
 # CPU cores at build time; libsdl2-dev/libgles-dev: BlastEm always links a renderer, even in
 # headless mode. USE_FBDEV and NOGL do not compile upstream, and desktop OpenGL pulls Mesa DRI
-# and LLVM (~155 MB) into the final image through libgl1, so the renderer is SDL2with GLES.
+# and LLVM (~155 MB) into the final image through libgl1, so the renderer is SDL2 with GLES.
 RUN apt-get update -qq && apt-get install -y --no-install-recommends \
     build-essential ca-certificates libgles-dev libsdl2-dev mercurial pkg-config python3 \
     && rm -rf /var/lib/apt/lists/*
@@ -155,8 +155,8 @@ FROM debian:trixie-slim
 #
 # trixie/main carries cmake 3.31.6 against toygine2's >= 3.27, so no extra suite is needed and
 # the builder stage takes the same package. ClownLZSS, built there, declares
-# cmake_minimum_required(VERSION 3.7.2), which CMake 4.x rejects: a base shipping CMake 4 will
-# need CMAKE_POLICY_VERSION_MINIMUM.
+# cmake_minimum_required(VERSION 3.7.2): below the 3.10 deprecation line, so cmake warns, and
+# above the 3.5 floor CMake 4 removed, so a CMake 4 base would still build it.
 ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get update -qq && apt-get install -y --no-install-recommends \
     make cmake ninja-build git ca-certificates curl xz-utils unzip \
