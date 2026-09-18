@@ -221,8 +221,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           # Actions does not order pending jobs in a concurrency group by commit, so an older run
-          # can publish after a newer one. The dated tag belongs to this run; latest moves only
-          # while main still points at this commit, so a late finisher cannot roll consumers back.
+          # can publish after a newer one. latest moves only while main still points at this
+          # commit, which keeps a late finisher from rolling consumers back. The dated tag stays
+          # YYYYMMDD to match _docker_build.yaml; a second build on one day can overwrite it.
           tags=(-t "${IMAGE}:${VERSION}")
           head=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq '.object.sha')
           if [ "$head" = "$GITHUB_SHA" ]; then
@@ -230,8 +231,13 @@ jobs:
           else
             echo "::warning::main moved to $head since $GITHUB_SHA; publishing $VERSION without latest"
           fi
-          # Each downloaded file is named after a digest and is empty on purpose.
-          docker buildx imagetools create "${tags[@]}" $(printf "${IMAGE}@sha256:%s " *)
+          # Each downloaded file is named after a digest and is empty on purpose. The array keeps
+          # every ref a single argument, with no dependence on word splitting (ShellCheck SC2046).
+          refs=()
+          for digest in *; do
+            refs+=("${IMAGE}@sha256:${digest}")
+          done
+          docker buildx imagetools create "${tags[@]}" "${refs[@]}"
 
       - name: Inspect manifest
         env:
