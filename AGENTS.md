@@ -31,7 +31,7 @@ You are an expert in Docker and Docker Compose. Your goal is to build minimal, s
 * **Shell Safety:** Use `SHELL ["/bin/bash", "-o", "pipefail", "-c"]` in any stage that pipes, so mid-pipeline failures fail the build.
 * **Runtime User:** No `USER` directive. As GitHub Actions job containers the runner bind-mounts `/__w` as the host runner user and starts the container without `--user`, so a baked-in non-root user breaks `actions/checkout` with `EACCES`. Local runs pass `--user "$(id -u):$(id -g)"` themselves.
 * **Build Context:** Images fetch their own sources; the context stays empty — never `COPY` host files into a toolchain image.
-* **Multi-Arch:** Build `linux/amd64` and `linux/arm64`; never drop one. From-source images get a native runner per platform (`_docker_build_native.yaml`), thin ones stay on `_docker_build.yaml` with arm64 under QEMU. Parallelize with `$(nproc)`; take the caller's timeout from a measured build.
+* **Multi-Arch:** Build `linux/amd64` and `linux/arm64`; never drop one. From-source images get a native runner per platform (`_docker_build_native.yaml`); relabel-only ones stay on `_docker_build.yaml`, where nothing executes and one runner emits both. A `RUN` moves them to the native workflow. Parallelize with `$(nproc)`; take the caller's timeout from a measured build.
 * **Smoke Test:** The builder stage must exercise the toolchain it built (compile an upstream example, print the compiler version), so breakage fails the build, not the consumer.
 * **Labels:** Static OCI and `com.toygine2.*` labels live in the Dockerfile; CI injects only `created`, `revision`, `version`.
 * **Comments:** Explain *why* — the trade-off, upstream quirk, ordering constraint — not what the command does.

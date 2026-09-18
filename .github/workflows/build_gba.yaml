@@ -7,14 +7,14 @@ on:
     paths:
       - Dockerfile.gba
       - .github/workflows/build_gba.yaml
-      - .github/workflows/_docker_build.yaml
+      - .github/workflows/_docker_build_native.yaml
   pull_request:
     branches:
       - main
     paths:
       - Dockerfile.gba
       - .github/workflows/build_gba.yaml
-      - .github/workflows/_docker_build.yaml
+      - .github/workflows/_docker_build_native.yaml
   workflow_dispatch:
 
 permissions:
@@ -25,8 +25,8 @@ jobs:
     permissions:
       contents: read
       packages: write
-    uses: ./.github/workflows/_docker_build.yaml
+    uses: ./.github/workflows/_docker_build_native.yaml
     with:
       image: gba
-      # mGBA is compiled from source; arm64 under QEMU needs extra time.
+      # mGBA compiles from source; one emulated job built both platforms in 13 min, so 60 fits.
       timeout: 60

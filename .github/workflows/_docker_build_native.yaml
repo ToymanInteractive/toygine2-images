@@ -1,8 +1,8 @@
 name: Build Docker image (native)
 
-# Reusable build/publish logic for images that compile from source: each platform builds on a
-# runner of its own architecture and a final job assembles the manifest list, so arm64 never
-# runs under QEMU. Thin images stay on _docker_build.yaml, where emulation costs nothing.
+# Reusable build/publish logic for images that compile from source: each platform builds on its
+# own runner and a final job assembles the manifest list. Images that only relabel a base run no
+# command while building, so they stay on _docker_build.yaml with one runner for both platforms.
 on:
   workflow_call:
     inputs:
