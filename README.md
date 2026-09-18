@@ -8,6 +8,7 @@ Docker images for toygine2 CI/CD pipelines, automatically rebuilt when upstream 
 | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
 | toygine2.gba.toolchain | [devkitARM](https://devkitpro.org/wiki/Getting_Started) toolchain for building ToyGine2 targeting the Nintendo Game Boy Advance         |
 | toygine2.md.toolchain  | [ClownMDSDK](https://github.com/Clownacy/clownmdsdk) toolchain for building ToyGine2 targeting the Sega Mega Drive/Genesis (`m68k-elf`) |
+| toygine2.n64.toolchain | [Libdragon](https://github.com/DragonMinded/libdragon) toolchain for building ToyGine2 targeting the Nintendo 64 (`mips64-elf`)         |
 
 ### GBA (Nintendo Game Boy Advance)
 
@@ -54,3 +55,21 @@ docker run --rm -v "$PWD":/workspace -w /workspace \
     ghcr.io/toymaninteractive/toygine2.md.toolchain:latest \
     blastem -t -b 600 build/rom.bin
 ```
+
+### Nintendo 64
+
+`Dockerfile.n64` builds the [Libdragon](https://github.com/DragonMinded/libdragon) toolchain for building ToyGine2 targeting the Nintendo 64 (`mips64-elf`). The image contains binutils, GCC, newlib, the libdragon library built from the `preview` branch, and its host tools (`n64tool`, `mksprite`, `audioconv64` and others).
+
+Everything is installed into `/opt/libdragon`. The image sets `N64_INST` to this path, and libdragon's `n64.mk` uses that variable to find the toolchain.
+
+The toolchain script and the library are pinned to separate commits. The script changes far less often than the library, and a shared pin would rebuild GCC on every library bump.
+
+Run (build a Makefile project mounted from the host):
+
+```sh
+docker run --rm -v "$PWD":/workspace -w /workspace \
+    ghcr.io/toymaninteractive/toygine2.n64.toolchain:latest \
+    make -C path/to/project
+```
+
+The image ships no emulator yet, so ROMs are built in CI but not run.

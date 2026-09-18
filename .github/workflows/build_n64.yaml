@@ -1,0 +1,34 @@
+name: Build Nintendo 64 toolchain
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - Dockerfile.n64
+      - .github/workflows/build_n64.yaml
+      - .github/workflows/_docker_build_native.yaml
+  pull_request:
+    branches:
+      - main
+    paths:
+      - Dockerfile.n64
+      - .github/workflows/build_n64.yaml
+      - .github/workflows/_docker_build_native.yaml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/_docker_build_native.yaml
+    with:
+      image: n64
+      # Libdragon's toolchain (binutils, GCC, newlib) and its library compile from source. Not
+      # measured on CI runners yet: a cold local build on arm64 took 27 min with 4 jobs, and the
+      # rest is headroom for a slow runner.
+      timeout: 180

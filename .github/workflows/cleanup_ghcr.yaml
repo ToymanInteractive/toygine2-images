@@ -34,6 +34,7 @@ jobs:
           - image: gba
           - image: gc
           - image: md
+          - image: n64
           - image: nds
           - image: switch
           - image: wii
