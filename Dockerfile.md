@@ -7,39 +7,39 @@
 #   stage3  AS            (Alfred Arnold's Z80 macro assembler; asl-releases submodule)
 #   stage4  misc          (headers, cartridge.mk/generic.mk, cartridge.ld, ClownLZSS)
 #
-# The toolchain is installed into /opt/clownmdsdk and copied into the final image
-# by the runtime stage.
+# It lands in /opt/clownmdsdk, which the final stage copies out of the builder.
 #
-# A parallel stage builds the BlastEm emulator from a pinned Mercurial changeset into /opt/blastem,
-# for running Mega Drive ROMs headless (`blastem -t -b <frames> rom.bin`) in CI.
+# A parallel stage builds BlastEm from a pinned Mercurial changeset into /opt/blastem, for
+# running Mega Drive ROMs headless in CI (`blastem -t -b <frames> rom.bin`).
 #
 # Usage (same as the other toygine2 images):
 #   docker build -t toygine2-md - < Dockerfile.md
 #   docker run --rm -v "$PWD":/workspace -w /workspace toygine2-md \
 #       make -C path/to/project
 
-# Pinned toolchain versions (global ARGs so the final image can expose them as metadata labels;
-# CLOWNMDSDK_COMMIT and BLASTEM_COMMIT are bumped like dependencies by the update workflows).
+# Pinned toolchain versions. Global ARGs so the final image can expose them as labels;
+# CLOWNMDSDK_COMMIT and BLASTEM_COMMIT are bumped like dependencies by the update workflows.
 ARG CLOWNMDSDK_COMMIT=7bc06af715c86956dbac37252eb67033740bcc0f
 ARG GCC_VERSION=16.2.0
 ARG BLASTEM_COMMIT=515a32bc605d11144db7bef9e0ea0538505eee48
 
 # --- Stage 1: ClownMDSDK toolchain builder ---
-FROM debian:bookworm-slim AS toolchain-builder
+FROM debian:trixie-slim AS toolchain-builder
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
-# build-essential/texinfo/flex/bison and libgmp/mpfr/mpc/zstd-dev build binutils and gcc;
-# cmake builds AS (stage3) and ClownLZSS (stage4); xz-utils unpacks the source archives.
+# build-essential/flex/bison and libgmp/mpfr/mpc/zstd-dev build binutils and gcc; cmake builds
+# AS (stage3) and ClownLZSS (stage4); xz-utils unpacks the source archives. texinfo is absent on
+# purpose: MAKEINFO=true below skips the info manuals nobody reads here.
 RUN apt-get update -qq && apt-get install -y --no-install-recommends \
-    build-essential cmake git curl ca-certificates patch texinfo flex bison \
+    build-essential cmake git curl ca-certificates patch flex bison \
     libgmp-dev libmpfr-dev libmpc-dev libzstd-dev xz-utils \
     && rm -rf /var/lib/apt/lists/*
 
-# Versions are pinned for reproducibility (bumped like dependencies).
+# Pinned for reproducibility, bumped like a dependency.
 ARG BINUTILS_VERSION=2.47
 
-# Inherit the globally pinned toolchain versions declared above.
+# From the global ARGs above.
 ARG CLOWNMDSDK_COMMIT
 ARG GCC_VERSION
 
@@ -63,9 +63,9 @@ RUN mkdir -p /tmp/clownmdsdk \
     && git submodule update --init --recursive --depth 1
 
 # Step 1: GNU Binutils (assembler/linker for m68k-elf).
-# MAKEFLAGS parallelizes the plain make inside binutils.sh (invoked without -j).
+# MAKEFLAGS carries -j and MAKEINFO into the plain make inside binutils.sh, which sets neither.
 RUN cd /tmp/clownmdsdk/stage1 \
-    && MAKEFLAGS="-j$(nproc)" && export MAKEFLAGS \
+    && MAKEFLAGS="-j$(nproc) MAKEINFO=true" && export MAKEFLAGS \
     && curl -fSL --retry 3 -o binutils.tar.xz \
     "https://ftp.gnu.org/gnu/binutils/binutils-${BINUTILS_VERSION}.tar.xz" \
     && { [ -z "${BINUTILS_SHA256}" ] || echo "${BINUTILS_SHA256}  binutils.tar.xz" | sha256sum -c -; } \
@@ -75,7 +75,7 @@ RUN cd /tmp/clownmdsdk/stage1 \
 
 # Step 2: GCC (C/C++ cross-compiler for m68k-elf), the longest step.
 RUN cd /tmp/clownmdsdk/stage2 \
-    && MAKEFLAGS="-j$(nproc)" && export MAKEFLAGS \
+    && MAKEFLAGS="-j$(nproc) MAKEINFO=true" && export MAKEFLAGS \
     && curl -fSL --retry 3 -o gcc.tar.xz \
     "https://ftp.gnu.org/gnu/gcc/gcc-${GCC_VERSION}/gcc-${GCC_VERSION}.tar.xz" \
     && { [ -z "${GCC_SHA256}" ] || echo "${GCC_SHA256}  gcc.tar.xz" | sha256sum -c -; } \
@@ -97,20 +97,19 @@ RUN if [ "${SKIP_SMOKE_TEST}" != "1" ]; then \
     fi
 
 # --- Stage 2: BlastEm builder ---
-FROM debian:bookworm-slim AS blastem-builder
+FROM debian:trixie-slim AS blastem-builder
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 # mercurial: upstream is a Mercurial repo with no git mirror; python3: cpu_dsl.py generates the
-# CPU cores at build time; libsdl2-dev/libgles-dev: BlastEm always links a renderer, even though
-# headless mode never opens a window. USE_FBDEV and NOGL do not compile upstream, and desktop
-# OpenGL pulls Mesa DRI and LLVM (~155 MB) into the final image through libgl1, so the renderer
-# is SDL2 with GLES.
+# CPU cores at build time; libsdl2-dev/libgles-dev: BlastEm always links a renderer, even in
+# headless mode. USE_FBDEV and NOGL do not compile upstream, and desktop OpenGL pulls Mesa DRI
+# and LLVM (~155 MB) into the final image through libgl1, so the renderer is SDL2with GLES.
 RUN apt-get update -qq && apt-get install -y --no-install-recommends \
     build-essential ca-certificates libgles-dev libsdl2-dev mercurial pkg-config python3 \
     && rm -rf /var/lib/apt/lists/*
 
-# Inherit the globally pinned BLASTEM_COMMIT declared above.
+# From the global ARG above.
 ARG BLASTEM_COMMIT
 
 # 1 = skip the headless ROM run after the build.
@@ -121,11 +120,11 @@ RUN hg clone -q -r "${BLASTEM_COMMIT}" https://www.retrodev.com/repos/blastem /t
 
 # Step 1: build and install next to the data files. BlastEm resolves rom.db and the default
 # configs from its own executable directory, so they must share /opt/blastem. NONUKLEAR drops
-# the GUI menu that headless mode never shows. x86_64 gets the dynarec cores; other CPUs (arm64)
-# fall back to the interpreter cores upstream calls NEW_CORE.
-# The link recipe is not marked recursive, so make closes its jobserver fds while MAKEFLAGS still
-# advertises them; GCC's lto-wrapper then dies with "write jobserver: Bad file descriptor" (seen
-# on amd64). CC drops MAKEFLAGS and OPT restates upstream's -O2 with an explicit LTRANS job count.
+# the GUI menu headless mode never shows. x86_64 gets the dynarec cores; arm64 falls back to
+# the interpreter cores upstream calls NEW_CORE.
+# The link recipe is not marked recursive, so make closes its jobserver fds while MAKEFLAGS
+# still advertises them, and GCC's lto-wrapper dies with "write jobserver: Bad file descriptor"
+# (seen on amd64). CC drops MAKEFLAGS; OPT restates upstream's -O2 with an LTRANS job count.
 RUN cd /tmp/blastem \
     && make -j"$(nproc)" CC="env -u MAKEFLAGS cc" OPT="-O2 -flto=$(nproc)" \
     USE_GLES=1 NONUKLEAR=1 blastem \
@@ -133,19 +132,18 @@ RUN cd /tmp/blastem \
     && cp blastem rom.db default.cfg systems.cfg /opt/blastem/ \
     && rm -rf /tmp/blastem
 
-# Copied after the build, so a ClownMDSDK bump reruns only the smoke test and the compile stays
-# cached.
+# Copied after the build, so a ClownMDSDK bump reruns the smoke test and leaves the compile cached.
 COPY --from=toolchain-builder /tmp/clownmdsdk/example/template-cartridge /tmp/template-cartridge
 
-# Smoke test: run the template cartridge headless. -t keeps BlastEm from spawning a terminal
-# emulator (and blocking on its FIFOs) when stdout is not a TTY, as in CI.
+# Smoke test: run the template cartridge headless. -t stops BlastEm spawning a terminal
+# emulator and blocking on its FIFOs when stdout is not a TTY, as in CI.
 RUN if [ "${SKIP_SMOKE_TEST}" != "1" ]; then \
     /opt/blastem/blastem -v \
     && /opt/blastem/blastem -t -b 60 /tmp/template-cartridge/bin/template-cartridge.bin; \
     fi
 
 # --- Stage 3: final image ---
-FROM debian:bookworm-slim
+FROM debian:trixie-slim
 
 # make: Makefile projects (cartridge.mk/generic.mk); cmake: toolchain.cmake; ninja-build: the
 # consumer CMake presets use the Ninja generator; git and ca-certificates: actions/checkout runs
@@ -155,16 +153,14 @@ FROM debian:bookworm-slim
 # host m68k-elf-g++ executable links against (a cross-compiler, but it runs on the host);
 # libsdl2-2.0-0/libgles2: BlastEm links them even when run headless.
 #
-# cmake comes from bookworm-backports: bookworm/main ships 3.25.1 and toygine2 requires >= 3.27.
-# The builder stage keeps the older main cmake on purpose: newer CMake rejects the old
-# cmake_minimum_required of the AS and ClownLZSS sources built there.
+# trixie/main carries cmake 3.31.6 against toygine2's >= 3.27, so no extra suite is needed and
+# the builder stage takes the same package. ClownLZSS, built there, declares
+# cmake_minimum_required(VERSION 3.7.2), which CMake 4.x rejects: a base shipping CMake 4 will
+# need CMAKE_POLICY_VERSION_MINIMUM.
 ARG DEBIAN_FRONTEND=noninteractive
-RUN echo "deb http://deb.debian.org/debian bookworm-backports main" \
-    > /etc/apt/sources.list.d/bookworm-backports.list \
-    && apt-get update -qq && apt-get install -y --no-install-recommends \
-    make ninja-build git ca-certificates curl xz-utils unzip \
+RUN apt-get update -qq && apt-get install -y --no-install-recommends \
+    make cmake ninja-build git ca-certificates curl xz-utils unzip \
     libgmp10 libmpfr6 libmpc3 libzstd1 libgles2 libsdl2-2.0-0 \
-    && apt-get install -y --no-install-recommends -t bookworm-backports cmake \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=toolchain-builder /opt/clownmdsdk /opt/clownmdsdk
@@ -187,12 +183,12 @@ LABEL org.opencontainers.image.licenses="MIT"
 
 LABEL org.opencontainers.image.title="ToyGine2 Mega Drive/Genesis Toolchain"
 LABEL org.opencontainers.image.description="ClownMDSDK toolchain for building ToyGine2 targeting Sega Mega Drive/Genesis."
-LABEL org.opencontainers.image.base.name="docker.io/library/debian:bookworm-slim"
+LABEL org.opencontainers.image.base.name="docker.io/library/debian:trixie-slim"
 
 LABEL com.toygine2.console="Sega Mega Drive/Genesis"
 LABEL com.toygine2.toolchain="ClownMDSDK"
 
-# Re-declare to bring the globally pinned values into this stage for the labels below.
+# Re-declared here so the labels below can read them.
 ARG CLOWNMDSDK_COMMIT
 ARG GCC_VERSION
 ARG BLASTEM_COMMIT

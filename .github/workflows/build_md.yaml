@@ -7,14 +7,14 @@ on:
     paths:
       - Dockerfile.md
       - .github/workflows/build_md.yaml
-      - .github/workflows/_docker_build.yaml
+      - .github/workflows/_docker_build_native.yaml
   pull_request:
     branches:
       - main
     paths:
       - Dockerfile.md
       - .github/workflows/build_md.yaml
-      - .github/workflows/_docker_build.yaml
+      - .github/workflows/_docker_build_native.yaml
   workflow_dispatch:
 
 permissions:
@@ -25,9 +25,9 @@ jobs:
     permissions:
       contents: read
       packages: write
-    uses: ./.github/workflows/_docker_build.yaml
+    uses: ./.github/workflows/_docker_build_native.yaml
     with:
       image: md
-      # ClownMDSDK toolchain (incl. GCC) and BlastEm are built from source; arm64 under QEMU needs extra time.
-      # A cold build already took ~233 min before BlastEm, so the timeout is at the hosted-runner maximum.
-      timeout: 360
+      # ClownMDSDK (incl. GCC) and BlastEm compile from source. A cold build on native runners
+      # took 16 min on amd64 and 13 on arm64; the rest is headroom for a slow runner.
+      timeout: 180
