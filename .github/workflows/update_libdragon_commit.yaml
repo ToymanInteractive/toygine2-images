@@ -1,0 +1,140 @@
+name: Update Libdragon commit
+
+on:
+  schedule:
+    # Weekly on Saturday 01:00 UTC
+    - cron: "0 1 * * 6"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  update:
+    concurrency:
+      group: update-libdragon-commit
+      cancel-in-progress: false
+    name: Bump Libdragon commit
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Resolve latest Libdragon preview commit
+        id: libdragon
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          latest=$(curl -fsSL \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            https://api.github.com/repos/DragonMinded/libdragon/commits/preview \
+            | jq -r .sha)
+          if [ -z "${latest}" ] || [ "${latest}" = "null" ]; then
+            echo "::error::Failed to resolve latest Libdragon preview commit" >&2
+            exit 1
+          fi
+          echo "sha=${latest}" >> "${GITHUB_OUTPUT}"
+          echo "short=${latest:0:7}" >> "${GITHUB_OUTPUT}"
+
+      - name: Update Dockerfile.n64
+        id: update
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          LATEST: ${{ steps.libdragon.outputs.sha }}
+        run: |
+          # Blob sha of tools/build-toolchain.sh at a given commit. The toolchain pin follows the
+          # script, not the branch: an unchanged script keeps the multi-hour GCC stage cached.
+          script_sha() {
+            curl -fsSL \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "https://api.github.com/repos/DragonMinded/libdragon/contents/tools/build-toolchain.sh?ref=$1" \
+              | jq -r .sha
+          }
+
+          current=$(grep -oP '^ARG LIBDRAGON_COMMIT=\K[0-9a-f]+' Dockerfile.n64) || {
+            echo "::error::Failed to extract LIBDRAGON_COMMIT from Dockerfile.n64" >&2
+            exit 1
+          }
+          current_toolchain=$(grep -oP '^ARG LIBDRAGON_TOOLCHAIN_COMMIT=\K[0-9a-f]+' Dockerfile.n64) || {
+            echo "::error::Failed to extract LIBDRAGON_TOOLCHAIN_COMMIT from Dockerfile.n64" >&2
+            exit 1
+          }
+          if [ -z "${current}" ] || [ -z "${current_toolchain}" ]; then
+            echo "::error::Pinned commits not found in Dockerfile.n64" >&2
+            exit 1
+          fi
+          echo "current=${current}"
+          echo "current_toolchain=${current_toolchain}"
+          echo "latest=${LATEST}"
+
+          latest_script=$(script_sha "${LATEST}")
+          current_script=$(script_sha "${current_toolchain}")
+          if [ -z "${latest_script}" ] || [ "${latest_script}" = "null" ] \
+            || [ -z "${current_script}" ] || [ "${current_script}" = "null" ]; then
+            echo "::error::Failed to resolve build-toolchain.sh blob sha" >&2
+            exit 1
+          fi
+
+          latest_toolchain="${current_toolchain}"
+          if [ "${latest_script}" != "${current_script}" ]; then
+            latest_toolchain="${LATEST}"
+          fi
+
+          if [ "${current}" = "${LATEST}" ] && [ "${current_toolchain}" = "${latest_toolchain}" ]; then
+            echo "changed=false" >> "${GITHUB_OUTPUT}"
+            echo "Already up to date."
+            exit 0
+          fi
+
+          sed -i "s/^ARG LIBDRAGON_COMMIT=.*/ARG LIBDRAGON_COMMIT=${LATEST}/" Dockerfile.n64
+          sed -i \
+            "s/^ARG LIBDRAGON_TOOLCHAIN_COMMIT=.*/ARG LIBDRAGON_TOOLCHAIN_COMMIT=${latest_toolchain}/" \
+            Dockerfile.n64
+          updated=$(grep -oP '^ARG LIBDRAGON_COMMIT=\K[0-9a-f]+' Dockerfile.n64)
+          updated_toolchain=$(grep -oP '^ARG LIBDRAGON_TOOLCHAIN_COMMIT=\K[0-9a-f]+' Dockerfile.n64)
+          if [ "${updated}" != "${LATEST}" ] || [ "${updated_toolchain}" != "${latest_toolchain}" ]; then
+            echo "::error::Failed to update the pinned commits in Dockerfile.n64" >&2
+            exit 1
+          fi
+
+          toolchain_note="unchanged (\`${current_toolchain}\`)"
+          if [ "${current_toolchain}" != "${latest_toolchain}" ]; then
+            toolchain_note="\`${current_toolchain}\` → \`${latest_toolchain}\` (build-toolchain.sh changed, so the compiler is rebuilt from scratch)"
+          fi
+          echo "changed=true" >> "${GITHUB_OUTPUT}"
+          echo "current=${current}" >> "${GITHUB_OUTPUT}"
+          echo "toolchain_note=${toolchain_note}" >> "${GITHUB_OUTPUT}"
+
+      - name: Create Pull Request
+        if: steps.update.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@v8.1.1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          sign-commits: true
+          branch: chore/bump-libdragon-commit
+          delete-branch: true
+          commit-message: "chore(deps): bump Libdragon to ${{ steps.libdragon.outputs.short }}"
+          title: "chore(deps): bump Libdragon to ${{ steps.libdragon.outputs.short }}"
+          assignees: dkrutskikh
+          body: |
+            Automated weekly bump of the pinned Libdragon commits in `Dockerfile.n64`.
+
+            - Repo: https://github.com/DragonMinded/libdragon
+            - From: `${{ steps.update.outputs.current }}`
+            - To: `${{ steps.libdragon.outputs.sha }}` (preview HEAD)
+            - Toolchain pin: ${{ steps.update.outputs.toolchain_note }}
+            - Compare: https://github.com/DragonMinded/libdragon/compare/${{ steps.update.outputs.current }}...${{ steps.libdragon.outputs.sha }}

@@ -1,0 +1,138 @@
+# Image with the Libdragon toolchain for building ToyGine2 targeting Nintendo 64 (mips64-elf).
+#
+# Libdragon's prebuilt toolchain packages date from 2023, so the image builds everything from source
+# in two stages:
+#   stage1  toolchain  upstream tools/build-toolchain.sh: binutils, GCC (C/C++), newlib
+#   stage2  library    libdragon itself plus its host tools (n64tool, mksprite, audioconv64, ...)
+#
+# Both stages install into /opt/libdragon (n64.mk finds it through N64_INST), and the final image
+# copies only that directory.
+#
+# Usage (same as the other toygine2 images):
+#   docker build -t toygine2-n64 - < Dockerfile.n64
+#   docker run --rm -v "$PWD":/workspace -w /workspace toygine2-n64 \
+#       make -C path/to/project
+
+# Pinned upstream commits (global ARGs so the final image can expose them as metadata labels;
+# both are bumped like dependencies by the update workflow).
+#
+# The toolchain and the library have separate pins. build-toolchain.sh changes far less often than
+# the library, and GCC is the slowest part of the build, so a shared pin would rebuild the compiler
+# on every library bump. LIBDRAGON_TOOLCHAIN_COMMIT moves only when the script changes, which keeps
+# stage 1 cached.
+ARG LIBDRAGON_TOOLCHAIN_COMMIT=39d0d6096130836a65710da6730290701d060272
+ARG LIBDRAGON_COMMIT=39d0d6096130836a65710da6730290701d060272
+
+# --- Stage 1: mips64-elf toolchain builder ---
+FROM debian:trixie-slim AS toolchain-builder
+
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
+# build-essential/texinfo/patch build binutils, GCC and newlib (the script patches GCC's config.gcc
+# for the N64 multilib layout); bzip2 unpacks GMP, the only source the script fetches as .tar.bz2;
+# zlib1g-dev is needed for the script's --with-system-zlib; curl downloads the sources (the script
+# uses wget when present, and the final image needs curl anyway); the GNU configure scripts call
+# file.
+RUN apt-get update -qq && apt-get install -y --no-install-recommends \
+    build-essential bzip2 ca-certificates curl file git patch texinfo zlib1g-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Inherit the globally pinned toolchain commit declared above.
+ARG LIBDRAGON_TOOLCHAIN_COMMIT
+
+# build-toolchain.sh reads N64_INST, BUILD_PATH and DOWNLOAD_PATH from the environment. They stay
+# set for stage 2, which builds the library against this prefix.
+ENV N64_INST=/opt/libdragon
+ENV BUILD_PATH=/tmp/toolchain
+ENV DOWNLOAD_PATH=/tmp/toolchain-sources
+ENV PATH="${N64_INST}/bin:${PATH}"
+
+# Step 0: Git clone and checkout.
+RUN mkdir -p /tmp/libdragon-toolchain \
+    && cd /tmp/libdragon-toolchain \
+    && git init -q \
+    && git remote add origin https://github.com/DragonMinded/libdragon.git \
+    && git fetch --depth 1 origin "${LIBDRAGON_TOOLCHAIN_COMMIT}" \
+    && git checkout -q --detach FETCH_HEAD
+
+# Step 1: binutils, GCC and newlib for mips64-elf, the longest step.
+# The script downloads the source archives itself, without checksums, and takes their versions
+# from the pinned script commit. It tees its log into BUILD_PATH before creating that directory,
+# so this step creates it first. Locales are removed because the whole prefix goes into the final
+# image and CI reads English diagnostics.
+RUN mkdir -p "${BUILD_PATH}" "${DOWNLOAD_PATH}" \
+    && bash /tmp/libdragon-toolchain/tools/build-toolchain.sh \
+    && rm -rf "${BUILD_PATH}" "${DOWNLOAD_PATH}" /tmp/libdragon-toolchain "${N64_INST}"/share/locale/*
+
+# --- Stage 2: libdragon library and host tools builder ---
+# Builds on the toolchain stage: the library needs its compiler, and the host tools need the
+# build-essential it already has.
+FROM toolchain-builder AS library-builder
+
+# Inherit the globally pinned library commit declared above.
+ARG LIBDRAGON_COMMIT
+
+# 1 = skip building the C++ example after install.
+ARG SKIP_SMOKE_TEST=0
+
+# Step 0: Git clone and checkout.
+RUN mkdir -p /tmp/libdragon \
+    && cd /tmp/libdragon \
+    && git init -q \
+    && git remote add origin https://github.com/DragonMinded/libdragon.git \
+    && git fetch --depth 1 origin "${LIBDRAGON_COMMIT}" \
+    && git checkout -q --detach FETCH_HEAD
+
+# Step 1: libdragon.a, the headers, n64.mk and the host tools, installed into N64_INST.
+# build.sh is upstream's own entry point; --no-examples leaves the examples to the smoke test.
+RUN cd /tmp/libdragon && ./build.sh --no-examples
+
+# Smoke test: build a C++ ROM with the freshly installed toolchain and library. cpptest is the
+# upstream C++ example, and ToyGine2 is written in C++.
+RUN if [ "${SKIP_SMOKE_TEST}" != "1" ]; then \
+    make -C /tmp/libdragon/examples/cpptest -j"$(nproc)" \
+    && mips64-elf-g++ --version; \
+    fi
+
+# --- Stage 3: final image ---
+FROM debian:trixie-slim
+
+# make: Makefile projects (n64.mk); cmake: toolchain.cmake; ninja-build: the consumer CMake presets
+# use the Ninja generator; git and ca-certificates: actions/checkout runs git from the image itself,
+# and without it checkout silently falls back to the REST API tarball, where 'submodules: recursive'
+# becomes a hard error; curl/xz-utils/unzip: CI steps fetch and unpack tools inside the job
+# container; libstdc++6: the C++ host tools (mkfont, mksprite, mkmodel, audioconv64) link it.
+RUN apt-get update -qq && apt-get install -y --no-install-recommends \
+    make cmake ninja-build git ca-certificates curl xz-utils unzip \
+    libstdc++6 \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=library-builder /opt/libdragon /opt/libdragon
+
+ENV LANG=C.UTF-8
+ENV N64_INST=/opt/libdragon
+ENV PATH="${N64_INST}/bin:${PATH}"
+
+WORKDIR /workspace
+CMD ["bash"]
+
+LABEL org.opencontainers.image.authors="Toyman Interactive <https://github.com/ToymanInteractive>"
+LABEL org.opencontainers.image.url="https://github.com/ToymanInteractive/toygine2-images"
+LABEL org.opencontainers.image.documentation="https://github.com/ToymanInteractive/toygine2-images/blob/main/README.md"
+LABEL org.opencontainers.image.source="https://github.com/ToymanInteractive/toygine2-images"
+
+LABEL org.opencontainers.image.vendor="Toyman Interactive"
+LABEL org.opencontainers.image.licenses="MIT"
+
+LABEL org.opencontainers.image.title="ToyGine2 Nintendo 64 Toolchain"
+LABEL org.opencontainers.image.description="Libdragon toolchain for building ToyGine2 targeting Nintendo 64."
+LABEL org.opencontainers.image.base.name="docker.io/library/debian:trixie-slim"
+
+LABEL com.toygine2.console="Nintendo 64"
+LABEL com.toygine2.toolchain="Libdragon"
+
+# Re-declare to bring the globally pinned values into this stage for the labels below.
+ARG LIBDRAGON_TOOLCHAIN_COMMIT
+ARG LIBDRAGON_COMMIT
+LABEL com.toygine2.sdk.libdragon.toolchain.commit="${LIBDRAGON_TOOLCHAIN_COMMIT}"
+LABEL com.toygine2.sdk.libdragon.commit="${LIBDRAGON_COMMIT}"
