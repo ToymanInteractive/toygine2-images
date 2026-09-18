@@ -11,7 +11,7 @@ on:
         required: true
         type: string
       timeout:
-        description: Job timeout in minutes (raise for from-source builds like GBA / MD).
+        description: Job timeout in minutes.
         required: false
         type: number
         default: 30
@@ -31,9 +31,6 @@ jobs:
 
     name: ${{ inputs.image }}
     runs-on: ubuntu-26.04
-    # arm64 is built under QEMU emulation, which is much slower than native. Images that
-    # compile from source (mGBA for GBA; ClownMDSDK with GCC and BlastEm for MD) raise the
-    # timeout in their caller for cold builds.
     timeout-minutes: ${{ inputs.timeout }}
     defaults:
       run:
@@ -47,7 +44,7 @@ jobs:
 
       - name: Check base image matches its label
         # Dependabot rewrites the FROM tag and leaves org.opencontainers.image.base.name untouched.
-        # This step runs before the QEMU and buildx setup so a mismatch fails in seconds instead of after a full emulated build.
+        # This step runs before buildx so a mismatch fails in seconds instead of after a push.
         env:
           IMAGE: ${{ inputs.image }}
         run: |
@@ -64,11 +61,8 @@ jobs:
             exit 1
           fi
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v4.4.0
-        with:
-          platforms: arm64
-
+      # No setup-qemu-action: these images are FROM plus LABEL, so an arm64 build runs no
+      # command. One that gains a RUN moves to _docker_build_native.yaml.
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4.4.0
 
