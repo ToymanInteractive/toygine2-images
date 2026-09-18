@@ -31,7 +31,7 @@ You are an expert in Docker and Docker Compose. Your goal is to build minimal, s
 * **Shell Safety:** Use `SHELL ["/bin/bash", "-o", "pipefail", "-c"]` in any stage that pipes, so mid-pipeline failures fail the build.
 * **Runtime User:** No `USER` directive. As GitHub Actions job containers the runner bind-mounts `/__w` as the host runner user and starts the container without `--user`, so a baked-in non-root user breaks `actions/checkout` with `EACCES`. Local runs pass `--user "$(id -u):$(id -g)"` themselves.
 * **Build Context:** Images fetch their own sources; the context stays empty — never `COPY` host files into a toolchain image.
-* **Multi-Arch:** Build `linux/amd64` and `linux/arm64`. arm64 runs under QEMU — parallelize with `$(nproc)` and raise the caller's timeout instead of dropping the platform.
+* **Multi-Arch:** Build `linux/amd64` and `linux/arm64`; never drop one. From-source images get a native runner per platform (`_docker_build_native.yaml`), thin ones stay on `_docker_build.yaml` with arm64 under QEMU. Parallelize with `$(nproc)`; take the caller's timeout from a measured build.
 * **Smoke Test:** The builder stage must exercise the toolchain it built (compile an upstream example, print the compiler version), so breakage fails the build, not the consumer.
 * **Labels:** Static OCI and `com.toygine2.*` labels live in the Dockerfile; CI injects only `created`, `revision`, `version`.
 * **Comments:** Explain *why* — the trade-off, upstream quirk, ordering constraint — not what the command does.
@@ -39,7 +39,7 @@ You are an expert in Docker and Docker Compose. Your goal is to build minimal, s
 ## Package Management
 
 * **Package Source:** Use the base image's package manager (`apt-get`, `dkp-pacman`); an upstream archive only when no package works — pinned and verified per **Integrity**.
-* **Newer Versions:** Too old for the consumer — take that one package from an official suite (`-t bookworm-backports cmake`), never swap the base image or add a third-party repo. Comment the required minimum and who needs it.
+* **Newer Versions:** Too old for the consumer — take that one package from an official suite (`-t trixie-backports cmake`), never swap the base image or add a third-party repo. Comment the required minimum and who needs it.
 * **Adding Packages:** Only when a concrete build or CI step fails without it. Extend the stage's existing `apt-get install` instead of adding a `RUN`, and comment *why*.
 * **Build vs Runtime Deps:** Compilers, `-dev` packages, and build-only tools stay in the builder; the final image gets the shared libs its binaries link against and what the CI job runs inside it — fetch/unpack tools (`curl`, `xz-utils`, `unzip`) included.
 * **Removing Packages:** Delete from the original install list; a later `purge`/`rm` layer does not shrink the image.

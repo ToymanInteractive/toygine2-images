@@ -1,0 +1,246 @@
+name: Build Docker image (native)
+
+# Reusable build/publish logic for images that compile from source: each platform builds on a
+# runner of its own architecture and a final job assembles the manifest list, so arm64 never
+# runs under QEMU. Thin images stay on _docker_build.yaml, where emulation costs nothing.
+on:
+  workflow_call:
+    inputs:
+      image:
+        description: Image target; selects Dockerfile.<image> and the published image name.
+        required: true
+        type: string
+      timeout:
+        description: Per-platform job timeout in minutes (the matrix jobs run in parallel).
+        required: false
+        type: number
+        default: 180
+
+permissions:
+  contents: read
+
+jobs:
+  # Runs the label check once instead of once per platform, and pins one UTC date for both, so
+  # a build started before midnight cannot label amd64 20260918 and arm64 20260919.
+  prepare:
+    name: ${{ inputs.image }} (prepare)
+    runs-on: ubuntu-slim
+    timeout-minutes: 5
+    defaults:
+      run:
+        shell: bash
+    outputs:
+      created: ${{ steps.build_date.outputs.created }}
+      version: ${{ steps.build_date.outputs.version }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Check base image matches its label
+        # Dependabot rewrites the FROM tag and leaves org.opencontainers.image.base.name untouched.
+        # This job costs seconds, so a mismatch fails before a runner starts compiling.
+        env:
+          IMAGE: ${{ inputs.image }}
+        run: |
+          dockerfile="Dockerfile.$IMAGE"
+          from=$(grep '^FROM ' "$dockerfile" | tail -1 | awk '{print $2}')
+          label=$(grep -o 'image.base.name="[^"]*"' "$dockerfile" | cut -d'"' -f2)
+          # docker.io/library/debian:x and debian:x name one image, so both sides are normalized
+          # and only a tag difference fails the step.
+          from=${from#docker.io/}
+          from=${from#library/}
+          label=${label#docker.io/}
+          label=${label#library/}
+          if [ "$from" != "$label" ]; then
+            echo "::error file=$dockerfile::FROM $from does not match base.name label $label"
+            exit 1
+          fi
+
+      - name: Compute build date
+        id: build_date
+        # Two date calls can straddle midnight and label the image one day while tagging it
+        # the next.
+        run: date -u +'created=%Y-%m-%dT%H:%M:%SZ%nversion=%Y%m%d' >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: prepare
+    concurrency:
+      group: docker-build-${{ inputs.image }}-${{ matrix.arch }}-${{ github.ref }}
+      # Never cancel an in-flight publish on main; supersede stale PR builds.
+      cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+    permissions:
+      contents: read
+      packages: write
+
+    name: ${{ inputs.image }} (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: ${{ inputs.timeout }}
+    strategy:
+      # Keep the other platform running: its log tells whether a failure is architecture-specific.
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            platform: linux/amd64
+            runner: ubuntu-26.04
+          - arch: arm64
+            platform: linux/arm64
+            runner: ubuntu-26.04-arm
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+
+      # No setup-qemu-action: each platform builds on its own architecture.
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4.3.0
+
+      - name: Log in to GHCR
+        # Forked-PR runs have no secrets, so login is skipped and cache reads may miss; the build
+        # still validates. Push and dispatch runs always log in.
+        if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+        uses: docker/login-action@v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build only
+        if: ${{ github.ref != 'refs/heads/main' }}
+        uses: docker/build-push-action@v7.3.0
+        with:
+          context: .
+          file: Dockerfile.${{ inputs.image }}
+          platforms: ${{ matrix.platform }}
+          # Provenance disabled: multi-platform attestations break some registries and runtimes
+          # (docker/build-push-action#781).
+          provenance: false
+          push: false
+          # The shared ref from the old single-job path holds mode=max layers for both platforms,
+          # so the first native builds start warm. It goes once the per-platform caches are full.
+          cache-from: |
+            type=registry,ref=ghcr.io/toymaninteractive/toygine2.${{ inputs.image }}.toolchain:buildcache-${{ matrix.arch }}
+            type=registry,ref=ghcr.io/toymaninteractive/toygine2.${{ inputs.image }}.toolchain:buildcache
+
+      - name: Build and push by digest
+        id: build
+        if: ${{ github.ref == 'refs/heads/main' }}
+        uses: docker/build-push-action@v7.3.0
+        with:
+          context: .
+          file: Dockerfile.${{ inputs.image }}
+          platforms: ${{ matrix.platform }}
+          provenance: false
+          # Labels live in the image config rather than the manifest list, so they are set here.
+          # Only build-time values belong in CI; static labels live in the Dockerfile.
+          labels: |
+            org.opencontainers.image.created=${{ needs.prepare.outputs.created }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ needs.prepare.outputs.version }}
+          # push-by-digest publishes an untagged image that the merge job ties to the tags;
+          # name-canonical keeps the image name in the pushed descriptor.
+          outputs: type=image,name=ghcr.io/toymaninteractive/toygine2.${{ inputs.image }}.toolchain,push-by-digest=true,name-canonical=true,push=true
+          cache-from: |
+            type=registry,ref=ghcr.io/toymaninteractive/toygine2.${{ inputs.image }}.toolchain:buildcache-${{ matrix.arch }}
+            type=registry,ref=ghcr.io/toymaninteractive/toygine2.${{ inputs.image }}.toolchain:buildcache
+          # Per-platform ref: two concurrent mode=max exports to one ref overwrite each other.
+          cache-to: type=registry,ref=ghcr.io/toymaninteractive/toygine2.${{ inputs.image }}.toolchain:buildcache-${{ matrix.arch }},mode=max
+
+      - name: Export digest
+        if: ${{ github.ref == 'refs/heads/main' }}
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          mkdir -p /tmp/digests
+          touch "/tmp/digests/${DIGEST#sha256:}"
+
+      - name: Upload digest
+        if: ${{ github.ref == 'refs/heads/main' }}
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: digests-${{ inputs.image }}-${{ matrix.arch }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  merge:
+    concurrency:
+      # Serializes publication per image: two runs on main must not write latest and the dated
+      # tag at once. queue: max makes a superseded run wait rather than cancel, so its dated tag
+      # still gets published.
+      group: docker-publish-${{ inputs.image }}
+      cancel-in-progress: false
+      queue: max
+    needs:
+      - prepare
+      - build
+    if: ${{ github.ref == 'refs/heads/main' }}
+    permissions:
+      contents: read
+      packages: write
+
+    name: ${{ inputs.image }} (manifest)
+    # Needs docker with buildx, so a full runner rather than ubuntu-slim.
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Download digests
+        uses: actions/download-artifact@v8.0.1
+        with:
+          path: /tmp/digests
+          pattern: digests-${{ inputs.image }}-*
+          merge-multiple: true
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4.3.0
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create manifest list and push
+        working-directory: /tmp/digests
+        env:
+          IMAGE: ghcr.io/toymaninteractive/toygine2.${{ inputs.image }}.toolchain
+          VERSION: ${{ needs.prepare.outputs.version }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Actions does not order pending jobs in a concurrency group by commit, so an older run
+          # can publish after a newer one. latest moves only while main still points at this
+          # commit, which keeps a late finisher from rolling consumers back. The dated tag stays
+          # YYYYMMDD to match _docker_build.yaml; a second build on one day can overwrite it.
+          tags=(-t "${IMAGE}:${VERSION}")
+          head=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq '.object.sha')
+          if [ "$head" = "$GITHUB_SHA" ]; then
+            tags+=(-t "${IMAGE}:latest")
+          else
+            echo "::warning::main moved to $head since $GITHUB_SHA; publishing $VERSION without latest"
+          fi
+          # Each downloaded file is named after a digest and is empty on purpose. The array keeps
+          # every ref a single argument, with no dependence on word splitting (ShellCheck SC2046).
+          refs=()
+          for digest in *; do
+            refs+=("${IMAGE}@sha256:${digest}")
+          done
+          docker buildx imagetools create "${tags[@]}" "${refs[@]}"
+
+      - name: Inspect manifest
+        env:
+          IMAGE: ghcr.io/toymaninteractive/toygine2.${{ inputs.image }}.toolchain
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: docker buildx imagetools inspect "${IMAGE}:${VERSION}"

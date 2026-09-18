@@ -49,12 +49,15 @@ jobs:
           account: toymaninteractive
           token: ${{ secrets.GITHUB_TOKEN }}
           image-names: toygine2.${{ matrix.image }}.toolchain
-          # Keep the moving "latest" tag and the buildcache used by _docker_build.yaml.
-          image-tags: "!latest !buildcache"
-          # Clean orphaned untagged manifests too; multi-arch children of kept tags are protected automatically since v3.1.0.
+          # Keep "latest" and every buildcache ref: the shared one from _docker_build.yaml and
+          # the per-platform ones from _docker_build_native.yaml.
+          image-tags: "!latest !buildcache*"
+          # Also clean orphaned untagged manifests; since v3.1.0 the children of kept multi-arch
+          # tags are protected automatically.
           tag-selection: both
-          # Grace period: skip anything younger than a day, such as a build that just published. keep-n-most-recent sets the retention.
+          # Grace period: skip anything younger than a day, such as a build that just published.
+          # Retention itself is keep-n-most-recent.
           cut-off: 1d
-          # Keep the 10 most recent dated (YYYYMMDD) tags; prune older ones.
+          # Keep the 10 most recent dated (YYYYMMDD) tags.
           keep-n-most-recent: 10
           dry-run: ${{ github.event_name == 'workflow_dispatch' && inputs.dry-run || false }}
