@@ -18,8 +18,8 @@
 ARG MGBA_COMMIT=25ca25612eb806ad3a70f3209ccd93890ea0c2c6
 
 # Pinned emibios release and the sha256 of its gba_bios.bin; the update workflow bumps both.
-ARG EMIBIOS_VERSION=0.1.4
-ARG EMIBIOS_SHA256=e8165a767dd0e02599e181044bba4556fdfa36b1bd049322f01b7aeb7cb0313a
+ARG EMIBIOS_VERSION=0.1.5
+ARG EMIBIOS_SHA256=f4614eb937a0bdad060828f08ca243b008bd8965b9d53090f352330997a7cd34
 
 # --- Stage 1: mGBA builder ---
 FROM devkitpro/devkitarm:20260610 AS mgba-builder
