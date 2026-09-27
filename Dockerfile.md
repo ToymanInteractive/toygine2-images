@@ -21,7 +21,7 @@
 # CLOWNMDSDK_COMMIT and BLASTEM_COMMIT are bumped like dependencies by the update workflows.
 ARG CLOWNMDSDK_COMMIT=7bc06af715c86956dbac37252eb67033740bcc0f
 ARG GCC_VERSION=16.2.0
-ARG BLASTEM_COMMIT=d22b34e780402e5e39ed7ee1dfa1d1faa7a57963
+ARG BLASTEM_COMMIT=9b71c8bd20654e8ac27b457fa55a8bc3b1d9446f
 
 # --- Stage 1: ClownMDSDK toolchain builder ---
 FROM debian:trixie-slim AS toolchain-builder
