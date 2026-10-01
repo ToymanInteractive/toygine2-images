@@ -104,7 +104,7 @@ Everything is installed into `/usr/local`. Config files next to the compiler (`c
 
 lcov is installed as in the GCC image. `gcov` is a symlink to `llvm-cov`, which runs in gcov mode under that name, so lcov and CMake scripts find it without `--gcov-tool`. lcov 2.x rejects some of Clang's coverage data (`unexpected line number '0'` for static initializers); capture with `--ignore-errors format,inconsistent`.
 
-clang-tidy reads `clang++.cfg`, and with it the libc++ default, only when the compile command names the compiler by absolute path. CMake writes such paths into `compile_commands.json`, so `clang-tidy -p build` works as is. Without a compilation database, pass the config after `--`: `clang-tidy main.cpp -- --driver-mode=g++ --config=/usr/local/bin/clang++.cfg -std=c++23`.
+clang-tidy loads `clang++.cfg`, and so libc++, only when the compile command gives the compiler's absolute path. CMake's `compile_commands.json` does, so `clang-tidy -p build` needs nothing extra. Without a compilation database, pass the config after `--`: `clang-tidy main.cpp -- --driver-mode=g++ --config=/usr/local/bin/clang++.cfg -std=c++23`.
 
 The version and the checksums of the release archives and the source tarball are pinned in the Dockerfile. A weekly workflow takes them from the latest LLVM release and opens a pull request with the new pin.
 

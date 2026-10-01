@@ -1,8 +1,8 @@
 # Latest stable Clang with libc++ for building and testing ToyGine2 on Linux.
 #
 # clang, clang-tidy, clang-format, lld, libc++/libc++abi/libunwind and compiler-rt come from the
-# official LLVM release. The image has no GCC compiler or libstdc++ headers; libc++ links GCC's
-# libatomic1, and the release's clang-tidy and clang-format link the base image's libstdc++.
+# official LLVM release. No GCC compiler or libstdc++ headers; libc++ links libatomic1, and
+# clang-tidy and clang-format link the base image's libstdc++.
 # Config files next to clang make libc++, lld and compiler-rt the defaults.
 #   stage1  lld-builder   lld rebuilt from the release sources
 #   stage2  llvm-builder  the rest extracted from the release archive into /usr/local
@@ -75,11 +75,11 @@ ARG TARGETARCH
 
 # The archive is about 1 GB, over 11 GB unpacked, so tar takes only what the image ships: the
 # drivers, the ld.lld name (lld comes from stage 1), the binutils CMake uses for Clang,
-# llvm-symbolizer for sanitizer traces, llvm-cov for coverage, clang-tidy and clang-format for
-# lint jobs, the resource directory, and libc++/libc++abi/libunwind with headers. Versioned paths
-# derive from LLVM_VERSION, so a major bump only changes the ARGs.
-# --long=31: the archive uses a 1 GB zstd window. The release ships clang-tidy with its symbol
-# table; stripping it saves about 60 MB at the cost of symbol names in its crash backtraces.
+# llvm-symbolizer for sanitizer traces, llvm-cov for coverage, clang-tidy, clang-format, the
+# resource directory, and libc++/libc++abi/libunwind with headers. Versioned paths derive from
+# LLVM_VERSION, so a major bump only changes the ARGs.
+# --long=31: the archive uses a 1 GB zstd window. Stripping clang-tidy saves about 60 MB; its
+# crash backtraces lose symbol names.
 RUN case "${TARGETARCH}" in \
     amd64) arch=X64 sha256="${LLVM_SHA256_AMD64}" ;; \
     arm64) arch=ARM64 sha256="${LLVM_SHA256_ARM64}" ;; \
@@ -119,9 +119,8 @@ RUN printf '%s\n' -fuse-ld=lld -rtlib=compiler-rt -unwindlib=libunwind > /usr/lo
 
 # Smoke test: C++23 from libc++ with the config defaults; ldd must show libc++ and neither
 # libstdc++ nor libgcc_s. The rpath is needed only here; the final image uses ld.so.conf.
-# clang-tidy reads clang++.cfg only when the compile command names the driver by absolute path,
-# as CMake's compile_commands.json does; otherwise it misses libc++ and fails on <expected>. A
-# compile error fails clang-tidy; the one check runs the engine and stays silent on clean code.
+# clang-tidy loads clang++.cfg (so libc++) only for an absolute driver path, as CMake writes it.
+# modernize-use-nullptr finds nothing here, so only a compile error fails the run.
 RUN printf '%s\n' '#include <expected>' '#include <print>' \
     'std::expected<int, int> answer() { return 42; }' \
     'int main() { std::print("{}\n", answer().value()); }' > /tmp/smoke.cpp \
