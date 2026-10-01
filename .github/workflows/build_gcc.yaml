@@ -1,0 +1,33 @@
+name: Build GCC toolchain
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - Dockerfile.gcc
+      - .github/workflows/build_gcc.yaml
+      - .github/workflows/_docker_build_native.yaml
+  pull_request:
+    branches:
+      - main
+    paths:
+      - Dockerfile.gcc
+      - .github/workflows/build_gcc.yaml
+      - .github/workflows/_docker_build_native.yaml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/_docker_build_native.yaml
+    with:
+      image: gcc
+      # Cold build: 9 min on a 10-core arm64 Mac, about 25 min expected on 4-core runners.
+      # Tighten after the first CI run.
+      timeout: 90

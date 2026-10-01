@@ -1,0 +1,137 @@
+name: Update LLVM release
+
+on:
+  schedule:
+    # Weekly on Saturday 01:00 UTC
+    - cron: "0 1 * * 6"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  update:
+    concurrency:
+      group: update-llvm-release
+      cancel-in-progress: false
+    name: Bump LLVM release
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Resolve latest LLVM release
+        id: llvm
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # releases/latest skips drafts and release candidates. The pins are GitHub's upload
+        # digests, so nothing is downloaded.
+        run: |
+          release=$(curl -fsSL --retry 3 \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            https://api.github.com/repos/llvm/llvm-project/releases/latest)
+          tag=$(jq -r .tag_name <<< "${release}")
+          latest=${tag#llvmorg-}
+          # The version goes into sed and a download URL, so allow only version characters.
+          if ! [[ "${latest}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Unexpected LLVM release tag: '${tag}'" >&2
+            exit 1
+          fi
+          digest() {
+            jq -r --arg name "$1" '.assets[] | select(.name == $name) | .digest' <<< "${release}"
+          }
+          # The Linux archives provide the toolchain; the source tarball rebuilds lld.
+          amd64=$(digest "LLVM-${latest}-Linux-X64.tar.zst")
+          arm64=$(digest "LLVM-${latest}-Linux-ARM64.tar.zst")
+          src=$(digest "llvm-project-${latest}.src.tar.xz")
+          for d in "${amd64}" "${arm64}" "${src}"; do
+            if ! [[ "${d}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+              echo "::error::Missing sha256 digest for an asset of LLVM ${latest}: '${d}'" >&2
+              exit 1
+            fi
+          done
+          {
+            echo "version=${latest}"
+            echo "sha256_src=${src#sha256:}"
+            echo "sha256_amd64=${amd64#sha256:}"
+            echo "sha256_arm64=${arm64#sha256:}"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Update Dockerfile.clang
+        id: update
+        env:
+          LATEST: ${{ steps.llvm.outputs.version }}
+          LATEST_SRC: ${{ steps.llvm.outputs.sha256_src }}
+          LATEST_AMD64: ${{ steps.llvm.outputs.sha256_amd64 }}
+          LATEST_ARM64: ${{ steps.llvm.outputs.sha256_arm64 }}
+        run: |
+          read_pins() {
+            grep -oP '^ARG LLVM_VERSION=\K\S+' Dockerfile.clang \
+              && grep -oP '^ARG LLVM_SRC_SHA256=\K[0-9a-f]*' Dockerfile.clang \
+              && grep -oP '^ARG LLVM_SHA256_AMD64=\K[0-9a-f]*' Dockerfile.clang \
+              && grep -oP '^ARG LLVM_SHA256_ARM64=\K[0-9a-f]*' Dockerfile.clang
+          }
+          current=$(read_pins | paste -sd' ') || {
+            echo "::error::Failed to extract the LLVM pins from Dockerfile.clang" >&2
+            exit 1
+          }
+          wanted="${LATEST} ${LATEST_SRC} ${LATEST_AMD64} ${LATEST_ARM64}"
+          echo "current=${current}"
+          echo "latest=${wanted}"
+          # releases/latest can point at a patch of an older branch; never move the pin back.
+          pinned=${current%% *}
+          newest=$(printf '%s\n' "${pinned}" "${LATEST}" | sort -V | tail -1)
+          if [ "${LATEST}" = "${pinned}" ] || [ "${newest}" != "${LATEST}" ]; then
+            echo "changed=false" >> "${GITHUB_OUTPUT}"
+            echo "Already up to date (pinned ${pinned}, latest release ${LATEST})."
+            exit 0
+          fi
+          sed -i \
+            -e "s/^ARG LLVM_VERSION=.*/ARG LLVM_VERSION=${LATEST}/" \
+            -e "s/^ARG LLVM_SRC_SHA256=.*/ARG LLVM_SRC_SHA256=${LATEST_SRC}/" \
+            -e "s/^ARG LLVM_SHA256_AMD64=.*/ARG LLVM_SHA256_AMD64=${LATEST_AMD64}/" \
+            -e "s/^ARG LLVM_SHA256_ARM64=.*/ARG LLVM_SHA256_ARM64=${LATEST_ARM64}/" \
+            Dockerfile.clang
+          if [ "$(read_pins | paste -sd' ')" != "${wanted}" ]; then
+            echo "::error::Failed to update the LLVM pins in Dockerfile.clang" >&2
+            exit 1
+          fi
+          {
+            echo "changed=true"
+            echo "current=${current%% *}"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Create Pull Request
+        if: steps.update.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@v8.1.1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          sign-commits: true
+          branch: chore/bump-llvm-release
+          delete-branch: true
+          commit-message: "chore(deps): bump LLVM to ${{ steps.llvm.outputs.version }}"
+          title: "chore(deps): bump LLVM to ${{ steps.llvm.outputs.version }}"
+          assignees: dkrutskikh
+          body: |
+            Automated weekly bump of the pinned LLVM release in `Dockerfile.clang`.
+
+            - From: `${{ steps.update.outputs.current }}`
+            - To: `${{ steps.llvm.outputs.version }}` (latest release)
+            - `llvm-project-${{ steps.llvm.outputs.version }}.src.tar.xz` sha256: `${{ steps.llvm.outputs.sha256_src }}`
+            - `LLVM-${{ steps.llvm.outputs.version }}-Linux-X64.tar.zst` sha256: `${{ steps.llvm.outputs.sha256_amd64 }}`
+            - `LLVM-${{ steps.llvm.outputs.version }}-Linux-ARM64.tar.zst` sha256: `${{ steps.llvm.outputs.sha256_arm64 }}`
+            - Release: https://github.com/llvm/llvm-project/releases/tag/llvmorg-${{ steps.llvm.outputs.version }}
+
+            A major bump renames `clang-<major>` and `lib/clang/<major>`; `Dockerfile.clang` derives both from `LLVM_VERSION`, and the image build's smoke test fails if the archive layout changed.
