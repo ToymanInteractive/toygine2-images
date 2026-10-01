@@ -5,7 +5,8 @@
 # Config files next to clang make libc++, lld and compiler-rt the defaults.
 #   stage1  lld-builder   lld rebuilt from the release sources
 #   stage2  llvm-builder  the rest extracted from the release archive into /usr/local
-# The final image copies /usr/local onto a slim base with CMake and Ninja.
+#   stage3  lcov-builder  lcov from its upstream release
+# The final image copies both /usr/local trees onto a slim base with CMake and Ninja.
 #
 # Usage (same as the other toygine2 images):
 #   docker build -t toygine2-clang - < Dockerfile.clang
@@ -18,6 +19,10 @@ ARG LLVM_VERSION=23.1.2
 ARG LLVM_SRC_SHA256=c98bbef08a2b4c2613cd50e9aa9ae7b69b1fe6c16b2c40373bc0ab6116fdf78a
 ARG LLVM_SHA256_AMD64=6382de1c1a210ce5a5cc49d18bc8444d137742e7cbf9b19f4ae602bb1ab52534
 ARG LLVM_SHA256_ARM64=143308c82f8e21707be7fdc135d5e0ddd9a46a377ca9f38befc716fd842cb59b
+
+# Bumped by hand from the release asset's digest; lcov has no update workflow.
+ARG LCOV_VERSION=2.5
+ARG LCOV_SHA256=7e5e5a154bd5f3557659c328cab376764e7abd238bb403c424472c296b175126
 
 # --- Stage 1: lld builder ---
 FROM debian:trixie-slim AS lld-builder
@@ -69,8 +74,9 @@ ARG TARGETARCH
 
 # The archive is about 1 GB, over 11 GB unpacked, so tar takes only what the image ships: the
 # drivers, the ld.lld name (lld comes from stage 1), the binutils CMake uses for Clang,
-# llvm-symbolizer for sanitizer traces, the resource directory, and libc++/libc++abi/libunwind
-# with headers. Versioned paths derive from LLVM_VERSION, so a major bump only changes the ARGs.
+# llvm-symbolizer for sanitizer traces, llvm-cov for coverage, the resource directory, and
+# libc++/libc++abi/libunwind with headers. Versioned paths derive from LLVM_VERSION, so a major
+# bump only changes the ARGs.
 # --long=31: the archive uses a 1 GB zstd window.
 RUN case "${TARGETARCH}" in \
     amd64) arch=X64 sha256="${LLVM_SHA256_AMD64}" ;; \
@@ -89,6 +95,7 @@ RUN case "${TARGETARCH}" in \
     "${name}/bin/ld.lld" \
     "${name}/bin/llvm-ar" "${name}/bin/llvm-ranlib" "${name}/bin/llvm-nm" \
     "${name}/bin/llvm-objcopy" "${name}/bin/llvm-strip" "${name}/bin/llvm-symbolizer" \
+    "${name}/bin/llvm-cov" \
     "${name}/lib/clang/${major}" \
     "${name}/lib/${triple}/libc++.so*" "${name}/lib/${triple}/libc++.a" \
     "${name}/lib/${triple}/libc++experimental.a" \
@@ -99,11 +106,13 @@ RUN case "${TARGETARCH}" in \
 COPY --from=lld-builder /opt/lld/bin/lld /usr/local/bin/lld
 
 # clang reads <driver>.cfg from its own directory; -rtlib/-unwindlib replace the absent libgcc.
-# cc and c++ (make's implicit rules) use the same config files.
+# cc and c++ (make's implicit rules) use the same config files. Called as gcov, llvm-cov acts
+# as gcov for lcov and toygine2's CodeCoverage.cmake.
 RUN printf '%s\n' -fuse-ld=lld -rtlib=compiler-rt -unwindlib=libunwind > /usr/local/bin/clang.cfg \
     && printf '%s\n' -stdlib=libc++ -fuse-ld=lld -rtlib=compiler-rt -unwindlib=libunwind \
     > /usr/local/bin/clang++.cfg \
-    && ln -s clang /usr/local/bin/cc && ln -s clang++ /usr/local/bin/c++
+    && ln -s clang /usr/local/bin/cc && ln -s clang++ /usr/local/bin/c++ \
+    && ln -s llvm-cov /usr/local/bin/gcov
 
 # Smoke test: C++23 from libc++ with the config defaults; ldd must show libc++ and neither
 # libstdc++ nor libgcc_s. The rpath is needed only here; the final image uses ld.so.conf.
@@ -119,20 +128,49 @@ RUN printf '%s\n' '#include <expected>' '#include <print>' \
     && clang++ --version \
     && rm /tmp/smoke /tmp/smoke.cpp /tmp/smoke.ldd
 
-# --- Stage 3: final image ---
+# --- Stage 3: lcov builder ---
+FROM debian:trixie-slim AS lcov-builder
+
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
+# make/perl: lcov's install target runs fix.pl on each script.
+RUN apt-get update -qq && apt-get install -y --no-install-recommends \
+    ca-certificates curl make perl \
+    && rm -rf /var/lib/apt/lists/*
+
+ARG LCOV_VERSION
+ARG LCOV_SHA256
+
+# Debian's lcov depends on gcc | llvm and would pull in GCC 14 (about 160 MB). install runs a
+# phony Sphinx docs build; -o doc_finished skips it, as the tarball ships the docs prebuilt.
+# PREFIX is baked into the scripts, so DESTDIR stages the tree. The rm drops docs, examples and
+# self-tests the image does not use (about 8 MB).
+RUN mkdir -p /tmp/lcov && cd /tmp/lcov \
+    && curl -fSL --retry 3 -o lcov.tar.gz \
+    "https://github.com/linux-test-project/lcov/releases/download/v${LCOV_VERSION}/lcov-${LCOV_VERSION}.tar.gz" \
+    && { [ -z "${LCOV_SHA256}" ] || echo "${LCOV_SHA256}  lcov.tar.gz" | sha256sum -c -; } \
+    && tar -xzf lcov.tar.gz && cd "lcov-${LCOV_VERSION}" \
+    && make -o doc_finished install PREFIX=/usr/local DESTDIR=/opt/lcov \
+    && cd /opt/lcov/usr/local/share \
+    && rm -rf man lcov/html lcov/example lcov/tests \
+    && cd / && rm -rf /tmp/lcov
+
+# --- Stage 4: final image ---
 FROM debian:trixie-slim
 
 # libc6-dev: glibc headers and crt files (no binutils: clang assembles, lld links, CMake uses
 # llvm-ar); libatomic1: libc++.so.1 needs it; make/cmake/ninja-build: the consumer presets;
 # git/ca-certificates: actions/checkout needs git for submodules; curl/xz-utils/unzip: CI fetches
 # tools inside the container; python3: every toygine2 image has it for CI helper scripts such as
-# tools/builder/bmf_from_csv.py.
+# tools/builder/bmf_from_csv.py; perl and its modules: lcov.
 RUN apt-get update -qq && apt-get install -y --no-install-recommends \
     libatomic1 libc6-dev \
     make cmake ninja-build git ca-certificates curl xz-utils unzip python3 \
+    perl libcapture-tiny-perl libdatetime-perl libtimedate-perl \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=llvm-builder /usr/local /usr/local
+COPY --from=lcov-builder /opt/lcov/usr/local /usr/local
 
 # Lets tests find libc++.so.1 without an rpath or LD_LIBRARY_PATH.
 RUN echo "/usr/local/lib/$(uname -m)-unknown-linux-gnu" > /etc/ld.so.conf.d/000-local.conf \
@@ -157,6 +195,8 @@ LABEL org.opencontainers.image.base.name="docker.io/library/debian:trixie-slim"
 
 LABEL com.toygine2.toolchain="LLVM"
 
-# Re-declare to bring the globally pinned value into this stage for the label below.
+# Re-declare to bring the globally pinned values into this stage for the labels below.
 ARG LLVM_VERSION
 LABEL com.toygine2.sdk.llvm.version="${LLVM_VERSION}"
+ARG LCOV_VERSION
+LABEL com.toygine2.sdk.lcov.version="${LCOV_VERSION}"

@@ -82,9 +82,11 @@ The image ships no emulator yet, so ROMs are built in CI but not run.
 
 `Dockerfile.gcc` builds the latest [GCC](https://gcc.gnu.org/) release (C and C++ only) from source for building and testing ToyGine2 on Linux. Debian's own GCC is older, and Ubuntu 26.04 ships only a pre-release GCC 16 snapshot.
 
-The compiler is installed into `/usr/local`, so `gcc`, `g++`, `c++` and a `cc` symlink are on `PATH`, and CMake and make find them without `CC` or `CXX`. Its `libstdc++` is registered with the dynamic loader, so test binaries run against it rather than Debian's older copy. The image also contains binutils, CMake, Ninja, make, git and Python 3.
+The compiler is installed into `/usr/local`, so `gcc`, `g++`, `c++` and a `cc` symlink are on `PATH`, and CMake and make find them without `CC` or `CXX`. Its `libstdc++` is registered with the dynamic loader, so test binaries run against it rather than Debian's older copy. The image also contains binutils, CMake, Ninja, make, git, Python 3 and lcov.
 
 The version and the tarball's sha256 are pinned in the Dockerfile. A weekly workflow checks for a new GCC release, verifies its GNU signature and opens a pull request with the new pin.
+
+lcov comes from its upstream release, because Debian's package depends on a compiler and would add GCC 14 to the image. Its version and checksum are pinned in `Dockerfile.gcc` and `Dockerfile.clang` and bumped by hand.
 
 Run (configure, build and test a CMake project mounted from the host):
 
@@ -99,6 +101,8 @@ docker run --rm --user "$(id -u):$(id -g)" -v "$PWD":/workspace -w /workspace \
 `Dockerfile.clang` packages the latest [LLVM](https://llvm.org/) release for building and testing ToyGine2 on Linux with libc++. clang, libc++, libc++abi, libunwind and compiler-rt come from the official release archive. lld is rebuilt from the same release's sources, because the archive's lld needs ICU 70 from Ubuntu 22.04 and Debian ships ICU 76. The image has no GCC compiler and no libstdc++.
 
 Everything is installed into `/usr/local`. Config files next to the compiler (`clang.cfg`, `clang++.cfg`) make libc++, lld, compiler-rt and libunwind the defaults, so `clang++ main.cpp` and a plain CMake configure need no extra flags. `cc` and `c++` point to `clang` and `clang++` and use the same defaults. The image has no libstdc++ headers, so `-stdlib=libstdc++` does not work here; use the GCC image for that. CMake picks `llvm-ar` and `llvm-ranlib` for Clang by itself.
+
+lcov is installed as in the GCC image. `gcov` is a symlink to `llvm-cov`, which runs in gcov mode under that name, so lcov and CMake scripts find it without `--gcov-tool`. lcov 2.x rejects some of Clang's coverage data (`unexpected line number '0'` for static initializers); capture with `--ignore-errors format,inconsistent`.
 
 The version and the checksums of the release archives and the source tarball are pinned in the Dockerfile. A weekly workflow takes them from the latest LLVM release and opens a pull request with the new pin.
 
