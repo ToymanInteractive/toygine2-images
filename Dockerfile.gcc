@@ -1,7 +1,7 @@
 # Latest stable GCC for building and testing ToyGine2 on Linux.
 #
 # Debian trixie has GCC 14 and Ubuntu 26.04 only a GCC 16 snapshot, so GCC (C and C++) is built
-# from source into /usr/local and copied onto a slim base with CMake and Ninja.
+# from source into /usr/local and copied onto a slim base with CMake, Ninja and lcov.
 #
 # Usage (same as the other toygine2 images):
 #   docker build -t toygine2-gcc - < Dockerfile.gcc
@@ -12,6 +12,10 @@
 # signature.
 ARG GCC_VERSION=16.2.0
 ARG GCC_SHA256=e6738e29597f733270731aa90600f37ffdc045079dfc27ec7e8192cc81085c3e
+
+# Bumped by hand from the release asset's digest; lcov has no update workflow.
+ARG LCOV_VERSION=2.5
+ARG LCOV_SHA256=7e5e5a154bd5f3557659c328cab376764e7abd238bb403c424472c296b175126
 
 # --- Stage 1: GCC builder ---
 FROM debian:trixie-slim AS gcc-builder
@@ -53,20 +57,49 @@ RUN printf '%s\n' '#include <expected>' '#include <print>' \
     && g++ --version \
     && rm /tmp/smoke /tmp/smoke.cpp
 
-# --- Stage 2: final image ---
+# --- Stage 2: lcov builder ---
+FROM debian:trixie-slim AS lcov-builder
+
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
+# make/perl: lcov's install target runs fix.pl on each script.
+RUN apt-get update -qq && apt-get install -y --no-install-recommends \
+    ca-certificates curl make perl \
+    && rm -rf /var/lib/apt/lists/*
+
+ARG LCOV_VERSION
+ARG LCOV_SHA256
+
+# Debian's lcov depends on gcc | llvm and would pull in GCC 14 (about 160 MB). install runs a
+# phony Sphinx docs build; -o doc_finished skips it, as the tarball ships the docs prebuilt.
+# PREFIX is baked into the scripts, so DESTDIR stages the tree. The rm drops docs, examples and
+# self-tests the image does not use (about 8 MB).
+RUN mkdir -p /tmp/lcov && cd /tmp/lcov \
+    && curl -fSL --retry 3 -o lcov.tar.gz \
+    "https://github.com/linux-test-project/lcov/releases/download/v${LCOV_VERSION}/lcov-${LCOV_VERSION}.tar.gz" \
+    && { [ -z "${LCOV_SHA256}" ] || echo "${LCOV_SHA256}  lcov.tar.gz" | sha256sum -c -; } \
+    && tar -xzf lcov.tar.gz && cd "lcov-${LCOV_VERSION}" \
+    && make -o doc_finished install PREFIX=/usr/local DESTDIR=/opt/lcov \
+    && cd /opt/lcov/usr/local/share \
+    && rm -rf man lcov/html lcov/example lcov/tests \
+    && cd / && rm -rf /tmp/lcov
+
+# --- Stage 3: final image ---
 FROM debian:trixie-slim
 
 # binutils/libc6-dev: assembler, linker, glibc; libgmp10/libisl23/libmpc3/libmpfr6/libzstd1: cc1
 # runtime deps; make/cmake/ninja-build: the consumer presets; git/ca-certificates: actions/checkout
 # needs git for submodules; curl/xz-utils/unzip: CI fetches tools inside the container; python3:
-# the benchmark step runs toygine2's tools/builder/bmf_from_csv.py.
+# the benchmark step runs toygine2's tools/builder/bmf_from_csv.py; perl and its modules: lcov.
 RUN apt-get update -qq && apt-get install -y --no-install-recommends \
     binutils libc6-dev \
     libgmp10 libisl23 libmpc3 libmpfr6 libzstd1 \
     make cmake ninja-build git ca-certificates curl xz-utils unzip python3 \
+    perl libcapture-tiny-perl libdatetime-perl libtimedate-perl \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=gcc-builder /usr/local /usr/local
+COPY --from=lcov-builder /opt/lcov/usr/local /usr/local
 
 # Without this the loader picks Debian's older libstdc++.so.6 and tests fail with "GLIBCXX_3.4.x
 # not found"; the new library is backward compatible, so system tools keep working. GCC installs
@@ -93,6 +126,8 @@ LABEL org.opencontainers.image.base.name="docker.io/library/debian:trixie-slim"
 
 LABEL com.toygine2.toolchain="GCC"
 
-# Re-declare to bring the globally pinned value into this stage for the label below.
+# Re-declare to bring the globally pinned values into this stage for the labels below.
 ARG GCC_VERSION
 LABEL com.toygine2.sdk.gcc.version="${GCC_VERSION}"
+ARG LCOV_VERSION
+LABEL com.toygine2.sdk.lcov.version="${LCOV_VERSION}"
