@@ -125,7 +125,8 @@ FROM debian:trixie-slim
 # libc6-dev: glibc headers and crt files (no binutils: clang assembles, lld links, CMake uses
 # llvm-ar); libatomic1: libc++.so.1 needs it; make/cmake/ninja-build: the consumer presets;
 # git/ca-certificates: actions/checkout needs git for submodules; curl/xz-utils/unzip: CI fetches
-# tools inside the container; python3: CI runs toygine2's tools/builder scripts.
+# tools inside the container; python3: every toygine2 image has it for CI helper scripts such as
+# tools/builder/bmf_from_csv.py.
 RUN apt-get update -qq && apt-get install -y --no-install-recommends \
     libatomic1 libc6-dev \
     make cmake ninja-build git ca-certificates curl xz-utils unzip python3 \

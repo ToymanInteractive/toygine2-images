@@ -12,7 +12,7 @@ Docker images for toygine2 CI/CD pipelines, automatically rebuilt when upstream 
 | toygine2.gcc.toolchain   | [GCC](https://gcc.gnu.org/) built from the latest release for building and testing ToyGine2 on Linux                                    |
 | toygine2.clang.toolchain | [Clang](https://clang.llvm.org/) with libc++ from the latest LLVM release for building and testing ToyGine2 on Linux                    |
 
-Every image has `python3` for the helper scripts toygine2 CI runs inside the container. The devkitPro images get it from their upstream base, and the Debian-based ones install it.
+Every image has `python3` for the helper scripts toygine2 CI runs inside the container, such as `tools/builder/bmf_from_csv.py`. The devkitPro base images already include it, and the Debian-based images install it.
 
 ### GBA (Nintendo Game Boy Advance)
 
