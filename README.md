@@ -12,6 +12,8 @@ Docker images for toygine2 CI/CD pipelines, automatically rebuilt when upstream 
 | toygine2.gcc.toolchain   | [GCC](https://gcc.gnu.org/) built from the latest release for building and testing ToyGine2 on Linux                                    |
 | toygine2.clang.toolchain | [Clang](https://clang.llvm.org/) with libc++ from the latest LLVM release for building and testing ToyGine2 on Linux                    |
 
+Every image has `python3` for the helper scripts toygine2 CI runs inside the container, such as `tools/builder/bmf_from_csv.py`. The devkitPro base images already include it, and the Debian-based images install it.
+
 ### GBA (Nintendo Game Boy Advance)
 
 `Dockerfile.gba` extends the upstream [devkitARM](https://devkitpro.org/wiki/Getting_Started) image for building ToyGine2 targeting the Nintendo Game Boy Advance.
@@ -80,7 +82,7 @@ The image ships no emulator yet, so ROMs are built in CI but not run.
 
 `Dockerfile.gcc` builds the latest [GCC](https://gcc.gnu.org/) release (C and C++ only) from source for building and testing ToyGine2 on Linux. Debian's own GCC is older, and Ubuntu 26.04 ships only a pre-release GCC 16 snapshot.
 
-The compiler is installed into `/usr/local`, so `gcc`, `g++`, `c++` and a `cc` symlink are on `PATH`, and CMake and make find them without `CC` or `CXX`. Its `libstdc++` is registered with the dynamic loader, so test binaries run against it rather than Debian's older copy. The image also contains binutils, CMake, Ninja, make and git.
+The compiler is installed into `/usr/local`, so `gcc`, `g++`, `c++` and a `cc` symlink are on `PATH`, and CMake and make find them without `CC` or `CXX`. Its `libstdc++` is registered with the dynamic loader, so test binaries run against it rather than Debian's older copy. The image also contains binutils, CMake, Ninja, make, git and Python 3.
 
 The version and the tarball's sha256 are pinned in the Dockerfile. A weekly workflow checks for a new GCC release, verifies its GNU signature and opens a pull request with the new pin.
 

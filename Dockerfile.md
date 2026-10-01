@@ -151,7 +151,8 @@ FROM debian:trixie-slim
 # where 'submodules: recursive' becomes a hard error; curl/xz-utils/unzip: CI steps fetch and
 # unpack tools inside the job container; libgmp10/libmpfr6/libmpc3/libzstd1: shared libs the
 # host m68k-elf-g++ executable links against (a cross-compiler, but it runs on the host);
-# libsdl2-2.0-0/libgles2: BlastEm links them even when run headless.
+# libsdl2-2.0-0/libgles2: BlastEm links them even when run headless; python3: every toygine2 image
+# has it for CI helper scripts such as tools/builder/bmf_from_csv.py.
 #
 # trixie/main carries cmake 3.31.6 against toygine2's >= 3.27, so no extra suite is needed and
 # the builder stage takes the same package. ClownLZSS, built there, declares
@@ -159,7 +160,7 @@ FROM debian:trixie-slim
 # above the 3.5 floor CMake 4 removed, so a CMake 4 base would still build it.
 ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get update -qq && apt-get install -y --no-install-recommends \
-    make cmake ninja-build git ca-certificates curl xz-utils unzip \
+    make cmake ninja-build git ca-certificates curl xz-utils unzip python3 \
     libgmp10 libmpfr6 libmpc3 libzstd1 libgles2 libsdl2-2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 

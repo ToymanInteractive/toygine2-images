@@ -100,9 +100,11 @@ FROM debian:trixie-slim
 # use the Ninja generator; git and ca-certificates: actions/checkout runs git from the image itself,
 # and without it checkout silently falls back to the REST API tarball, where 'submodules: recursive'
 # becomes a hard error; curl/xz-utils/unzip: CI steps fetch and unpack tools inside the job
-# container; libstdc++6: the C++ host tools (mkfont, mksprite, mkmodel, audioconv64) link it.
+# container; python3: every toygine2 image has it for CI helper scripts such as
+# tools/builder/bmf_from_csv.py; libstdc++6: the C++ host tools (mkfont, mksprite, mkmodel,
+# audioconv64) link it.
 RUN apt-get update -qq && apt-get install -y --no-install-recommends \
-    make cmake ninja-build git ca-certificates curl xz-utils unzip \
+    make cmake ninja-build git ca-certificates curl xz-utils unzip python3 \
     libstdc++6 \
     && rm -rf /var/lib/apt/lists/*
 

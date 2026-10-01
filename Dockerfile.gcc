@@ -58,11 +58,12 @@ FROM debian:trixie-slim
 
 # binutils/libc6-dev: assembler, linker, glibc; libgmp10/libisl23/libmpc3/libmpfr6/libzstd1: cc1
 # runtime deps; make/cmake/ninja-build: the consumer presets; git/ca-certificates: actions/checkout
-# needs git for submodules; curl/xz-utils/unzip: CI fetches tools inside the container.
+# needs git for submodules; curl/xz-utils/unzip: CI fetches tools inside the container; python3:
+# the benchmark step runs toygine2's tools/builder/bmf_from_csv.py.
 RUN apt-get update -qq && apt-get install -y --no-install-recommends \
     binutils libc6-dev \
     libgmp10 libisl23 libmpc3 libmpfr6 libzstd1 \
-    make cmake ninja-build git ca-certificates curl xz-utils unzip \
+    make cmake ninja-build git ca-certificates curl xz-utils unzip python3 \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=gcc-builder /usr/local /usr/local
