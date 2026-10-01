@@ -90,9 +90,12 @@ jobs:
           wanted="${LATEST} ${LATEST_SRC} ${LATEST_AMD64} ${LATEST_ARM64}"
           echo "current=${current}"
           echo "latest=${wanted}"
-          if [ "${current}" = "${wanted}" ]; then
+          # releases/latest can point at a patch of an older branch; never move the pin back.
+          pinned=${current%% *}
+          newest=$(printf '%s\n' "${pinned}" "${LATEST}" | sort -V | tail -1)
+          if [ "${LATEST}" = "${pinned}" ] || [ "${newest}" != "${LATEST}" ]; then
             echo "changed=false" >> "${GITHUB_OUTPUT}"
-            echo "Already up to date."
+            echo "Already up to date (pinned ${pinned}, latest release ${LATEST})."
             exit 0
           fi
           sed -i \
