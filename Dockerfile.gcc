@@ -1,0 +1,97 @@
+# Latest stable GCC for building and testing ToyGine2 on Linux.
+#
+# Debian trixie has GCC 14 and Ubuntu 26.04 only a GCC 16 snapshot, so GCC (C and C++) is built
+# from source into /usr/local and copied onto a slim base with CMake and Ninja.
+#
+# Usage (same as the other toygine2 images):
+#   docker build -t toygine2-gcc - < Dockerfile.gcc
+#   docker run --rm --user "$(id -u):$(id -g)" -v "$PWD":/workspace -w /workspace toygine2-gcc \
+#       cmake --preset linux-release
+
+# Global so the final image can label it. The update workflow bumps both after checking the GNU
+# signature.
+ARG GCC_VERSION=16.2.0
+ARG GCC_SHA256=e6738e29597f733270731aa90600f37ffdc045079dfc27ec7e8192cc81085c3e
+
+# --- Stage 1: GCC builder ---
+FROM debian:trixie-slim AS gcc-builder
+
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
+# build-essential: GCC 14 builds the new GCC; flex/bison: GCC's generators; libgmp/mpfr/mpc/
+# isl-dev: cc1 dependencies; libzstd-dev: compressed LTO; zlib1g-dev: --with-system-zlib.
+RUN apt-get update -qq && apt-get install -y --no-install-recommends \
+    bison build-essential ca-certificates curl flex libgmp-dev libisl-dev libmpc-dev libmpfr-dev \
+    libzstd-dev xz-utils zlib1g-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+ARG GCC_VERSION
+ARG GCC_SHA256
+
+# No bootstrap: the new compiler builds libstdc++ and the other target libraries anyway, and a
+# bootstrap would triple the build time for the same output. --disable-nls keeps CI diagnostics
+# in English. MAKEINFO=true skips the info manuals.
+RUN mkdir -p /tmp/gcc && cd /tmp/gcc \
+    && curl -fSL --retry 3 -o gcc.tar.xz \
+    "https://ftp.gnu.org/gnu/gcc/gcc-${GCC_VERSION}/gcc-${GCC_VERSION}.tar.xz" \
+    && { [ -z "${GCC_SHA256}" ] || echo "${GCC_SHA256}  gcc.tar.xz" | sha256sum -c -; } \
+    && tar -xf gcc.tar.xz \
+    && mkdir build && cd build \
+    && "../gcc-${GCC_VERSION}/configure" --prefix=/usr/local --enable-languages=c,c++ \
+    --disable-multilib --disable-bootstrap --disable-nls --with-system-zlib --enable-default-pie \
+    && make -j"$(nproc)" MAKEINFO=true \
+    && make install-strip MAKEINFO=true \
+    && cd / && rm -rf /tmp/gcc
+
+# Smoke test: C++23 features GCC 14 lacks, run against the new libstdc++. The rpath is needed
+# only here; the final image registers /usr/local/lib64 with the loader.
+RUN printf '%s\n' '#include <expected>' '#include <print>' \
+    'std::expected<int, int> answer() { return 42; }' \
+    'int main() { std::print("{}\n", answer().value()); }' > /tmp/smoke.cpp \
+    && g++ -std=c++23 -O2 -Wl,-rpath,/usr/local/lib64 /tmp/smoke.cpp -o /tmp/smoke \
+    && [ "$(/tmp/smoke)" = 42 ] \
+    && g++ --version \
+    && rm /tmp/smoke /tmp/smoke.cpp
+
+# --- Stage 2: final image ---
+FROM debian:trixie-slim
+
+# binutils/libc6-dev: assembler, linker, glibc; libgmp10/libisl23/libmpc3/libmpfr6/libzstd1: cc1
+# runtime deps; make/cmake/ninja-build: the consumer presets; git/ca-certificates: actions/checkout
+# needs git for submodules; curl/xz-utils/unzip: CI fetches tools inside the container.
+RUN apt-get update -qq && apt-get install -y --no-install-recommends \
+    binutils libc6-dev \
+    libgmp10 libisl23 libmpc3 libmpfr6 libzstd1 \
+    make cmake ninja-build git ca-certificates curl xz-utils unzip \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=gcc-builder /usr/local /usr/local
+
+# Without this the loader picks Debian's older libstdc++.so.6 and tests fail with "GLIBCXX_3.4.x
+# not found"; the new library is backward compatible, so system tools keep working. GCC installs
+# no cc, which make's implicit rules call.
+RUN echo /usr/local/lib64 > /etc/ld.so.conf.d/000-local.conf && ldconfig \
+    && ln -s gcc /usr/local/bin/cc
+
+ENV LANG=C.UTF-8
+
+WORKDIR /workspace
+CMD ["bash"]
+
+LABEL org.opencontainers.image.authors="Toyman Interactive <https://github.com/ToymanInteractive>"
+LABEL org.opencontainers.image.url="https://github.com/ToymanInteractive/toygine2-images"
+LABEL org.opencontainers.image.documentation="https://github.com/ToymanInteractive/toygine2-images/blob/main/README.md"
+LABEL org.opencontainers.image.source="https://github.com/ToymanInteractive/toygine2-images"
+
+LABEL org.opencontainers.image.vendor="Toyman Interactive"
+LABEL org.opencontainers.image.licenses="MIT"
+
+LABEL org.opencontainers.image.title="ToyGine2 GCC Toolchain"
+LABEL org.opencontainers.image.description="GCC toolchain for building ToyGine2 for Linux."
+LABEL org.opencontainers.image.base.name="docker.io/library/debian:trixie-slim"
+
+LABEL com.toygine2.toolchain="GCC"
+
+# Re-declare to bring the globally pinned value into this stage for the label below.
+ARG GCC_VERSION
+LABEL com.toygine2.sdk.gcc.version="${GCC_VERSION}"

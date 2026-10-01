@@ -1,0 +1,161 @@
+# Latest stable Clang with libc++ for building and testing ToyGine2 on Linux.
+#
+# clang, lld, libc++/libc++abi/libunwind and compiler-rt come from the official LLVM release. The
+# image has no GCC compiler or libstdc++; its only GCC piece is libatomic1, which libc++ links.
+# Config files next to clang make libc++, lld and compiler-rt the defaults.
+#   stage1  lld-builder   lld rebuilt from the release sources
+#   stage2  llvm-builder  the rest extracted from the release archive into /usr/local
+# The final image copies /usr/local onto a slim base with CMake and Ninja.
+#
+# Usage (same as the other toygine2 images):
+#   docker build -t toygine2-clang - < Dockerfile.clang
+#   docker run --rm --user "$(id -u):$(id -g)" -v "$PWD":/workspace -w /workspace toygine2-clang \
+#       cmake --preset linux-release
+
+# Global so the final image can label it. The update workflow bumps all four from GitHub's upload
+# digests: the source tarball and one archive per platform.
+ARG LLVM_VERSION=23.1.2
+ARG LLVM_SRC_SHA256=c98bbef08a2b4c2613cd50e9aa9ae7b69b1fe6c16b2c40373bc0ab6116fdf78a
+ARG LLVM_SHA256_AMD64=6382de1c1a210ce5a5cc49d18bc8444d137742e7cbf9b19f4ae602bb1ab52534
+ARG LLVM_SHA256_ARM64=143308c82f8e21707be7fdc135d5e0ddd9a46a377ca9f38befc716fd842cb59b
+
+# --- Stage 1: lld builder ---
+FROM debian:trixie-slim AS lld-builder
+
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
+# python3: LLVM's build scripts; zlib1g-dev/libzstd-dev: compressed debug sections, as upstream.
+RUN apt-get update -qq && apt-get install -y --no-install-recommends \
+    build-essential ca-certificates cmake curl libzstd-dev ninja-build python3 xz-utils zlib1g-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+ARG LLVM_VERSION
+ARG LLVM_SRC_SHA256
+
+# The release's lld links Ubuntu 22.04's libxml2 statically and needs its ICU 70; trixie has
+# ICU 76 with versioned symbols, so that lld cannot run here. This stage rebuilds it without
+# libxml2, for the host target only (each extra target adds a backend). GCC takes up to 2 GB per
+# LLVM source, so compile jobs are capped by memory; one per core exhausts an 8 GB Docker VM.
+# LLVM's CMake needs the libc/ headers.
+RUN mkdir -p /tmp/lld && cd /tmp/lld \
+    && curl -fSL --retry 3 -o src.tar.xz \
+    "https://github.com/llvm/llvm-project/releases/download/llvmorg-${LLVM_VERSION}/llvm-project-${LLVM_VERSION}.src.tar.xz" \
+    && { [ -z "${LLVM_SRC_SHA256}" ] || echo "${LLVM_SRC_SHA256}  src.tar.xz" | sha256sum -c -; } \
+    && src="llvm-project-${LLVM_VERSION}.src" \
+    && tar -xf src.tar.xz "${src}/cmake" "${src}/llvm" "${src}/lld" "${src}/libc" \
+    "${src}/libunwind/include" "${src}/third-party" \
+    && cmake -G Ninja -S "${src}/llvm" -B build -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_INSTALL_PREFIX=/opt/lld -DLLVM_ENABLE_PROJECTS=lld -DLLVM_TARGETS_TO_BUILD=host \
+    -DLLVM_ENABLE_LIBXML2=OFF -DLLVM_ENABLE_ZLIB=FORCE_ON -DLLVM_ENABLE_ZSTD=FORCE_ON \
+    -DLLVM_INCLUDE_TESTS=OFF -DLLVM_INCLUDE_BENCHMARKS=OFF -DLLVM_INCLUDE_EXAMPLES=OFF \
+    -DLLVM_INCLUDE_DOCS=OFF -DLLVM_RAM_PER_COMPILE_JOB=2000 -DLLVM_PARALLEL_LINK_JOBS=1 \
+    && ninja -C build install-lld-stripped \
+    && cd / && rm -rf /tmp/lld
+
+# --- Stage 2: LLVM extractor ---
+FROM debian:trixie-slim AS llvm-builder
+
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
+# libc6-dev and libatomic1 (loaded by libc++.so.1) let the smoke test link and run.
+RUN apt-get update -qq && apt-get install -y --no-install-recommends \
+    ca-certificates curl libatomic1 libc6-dev zstd \
+    && rm -rf /var/lib/apt/lists/*
+
+ARG LLVM_VERSION
+ARG LLVM_SHA256_AMD64
+ARG LLVM_SHA256_ARM64
+ARG TARGETARCH
+
+# The archive is about 1 GB, over 11 GB unpacked, so tar takes only what the image ships: the
+# drivers, the ld.lld name (lld comes from stage 1), the binutils CMake uses for Clang,
+# llvm-symbolizer for sanitizer traces, the resource directory, and libc++/libc++abi/libunwind
+# with headers. Versioned paths derive from LLVM_VERSION, so a major bump only changes the ARGs.
+# --long=31: the archive uses a 1 GB zstd window.
+RUN case "${TARGETARCH}" in \
+    amd64) arch=X64 sha256="${LLVM_SHA256_AMD64}" ;; \
+    arm64) arch=ARM64 sha256="${LLVM_SHA256_ARM64}" ;; \
+    *) echo "Unsupported TARGETARCH: ${TARGETARCH}" >&2 && exit 1 ;; \
+    esac \
+    && name="LLVM-${LLVM_VERSION}-Linux-${arch}" \
+    && major="${LLVM_VERSION%%.*}" \
+    && triple="$(uname -m)-unknown-linux-gnu" \
+    && curl -fSL --retry 3 -o /tmp/llvm.tar.zst \
+    "https://github.com/llvm/llvm-project/releases/download/llvmorg-${LLVM_VERSION}/${name}.tar.zst" \
+    && { [ -z "${sha256}" ] || echo "${sha256}  /tmp/llvm.tar.zst" | sha256sum -c -; } \
+    && zstd -dc --long=31 /tmp/llvm.tar.zst \
+    | tar -x -C /usr/local --strip-components=1 --wildcards \
+    "${name}/bin/clang" "${name}/bin/clang++" "${name}/bin/clang-${major}" \
+    "${name}/bin/ld.lld" \
+    "${name}/bin/llvm-ar" "${name}/bin/llvm-ranlib" "${name}/bin/llvm-nm" \
+    "${name}/bin/llvm-objcopy" "${name}/bin/llvm-strip" "${name}/bin/llvm-symbolizer" \
+    "${name}/lib/clang/${major}" \
+    "${name}/lib/${triple}/libc++.so*" "${name}/lib/${triple}/libc++.a" \
+    "${name}/lib/${triple}/libc++experimental.a" \
+    "${name}/lib/${triple}/libc++abi.*" "${name}/lib/${triple}/libunwind.*" \
+    "${name}/include/c++/v1" "${name}/include/${triple}/c++/v1" \
+    && rm /tmp/llvm.tar.zst
+
+COPY --from=lld-builder /opt/lld/bin/lld /usr/local/bin/lld
+
+# clang reads <driver>.cfg from its own directory; -rtlib/-unwindlib replace the absent libgcc.
+# cc and c++ (make's implicit rules) use the same config files.
+RUN printf '%s\n' -fuse-ld=lld -rtlib=compiler-rt -unwindlib=libunwind > /usr/local/bin/clang.cfg \
+    && printf '%s\n' -stdlib=libc++ -fuse-ld=lld -rtlib=compiler-rt -unwindlib=libunwind \
+    > /usr/local/bin/clang++.cfg \
+    && ln -s clang /usr/local/bin/cc && ln -s clang++ /usr/local/bin/c++
+
+# Smoke test: C++23 from libc++ with the config defaults; ldd must show libc++ and neither
+# libstdc++ nor libgcc_s. The rpath is needed only here; the final image uses ld.so.conf.
+RUN printf '%s\n' '#include <expected>' '#include <print>' \
+    'std::expected<int, int> answer() { return 42; }' \
+    'int main() { std::print("{}\n", answer().value()); }' > /tmp/smoke.cpp \
+    && clang++ -std=c++23 -O2 -Wl,-rpath,"/usr/local/lib/$(uname -m)-unknown-linux-gnu" \
+    /tmp/smoke.cpp -o /tmp/smoke \
+    && [ "$(/tmp/smoke)" = 42 ] \
+    && ldd /tmp/smoke > /tmp/smoke.ldd \
+    && grep -q 'libc++\.so\.1' /tmp/smoke.ldd \
+    && ! grep -qE 'libstdc\+\+|libgcc_s' /tmp/smoke.ldd \
+    && clang++ --version \
+    && rm /tmp/smoke /tmp/smoke.cpp /tmp/smoke.ldd
+
+# --- Stage 3: final image ---
+FROM debian:trixie-slim
+
+# libc6-dev: glibc headers and crt files (no binutils: clang assembles, lld links, CMake uses
+# llvm-ar); libatomic1: libc++.so.1 needs it; make/cmake/ninja-build: the consumer presets;
+# git/ca-certificates: actions/checkout needs git for submodules; curl/xz-utils/unzip: CI fetches
+# tools inside the container.
+RUN apt-get update -qq && apt-get install -y --no-install-recommends \
+    libatomic1 libc6-dev \
+    make cmake ninja-build git ca-certificates curl xz-utils unzip \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=llvm-builder /usr/local /usr/local
+
+# Lets tests find libc++.so.1 without an rpath or LD_LIBRARY_PATH.
+RUN echo "/usr/local/lib/$(uname -m)-unknown-linux-gnu" > /etc/ld.so.conf.d/000-local.conf \
+    && ldconfig
+
+ENV LANG=C.UTF-8
+
+WORKDIR /workspace
+CMD ["bash"]
+
+LABEL org.opencontainers.image.authors="Toyman Interactive <https://github.com/ToymanInteractive>"
+LABEL org.opencontainers.image.url="https://github.com/ToymanInteractive/toygine2-images"
+LABEL org.opencontainers.image.documentation="https://github.com/ToymanInteractive/toygine2-images/blob/main/README.md"
+LABEL org.opencontainers.image.source="https://github.com/ToymanInteractive/toygine2-images"
+
+LABEL org.opencontainers.image.vendor="Toyman Interactive"
+LABEL org.opencontainers.image.licenses="MIT"
+
+LABEL org.opencontainers.image.title="ToyGine2 Clang Toolchain"
+LABEL org.opencontainers.image.description="Clang toolchain with libc++ for building ToyGine2 for Linux."
+LABEL org.opencontainers.image.base.name="docker.io/library/debian:trixie-slim"
+
+LABEL com.toygine2.toolchain="LLVM"
+
+# Re-declare to bring the globally pinned value into this stage for the label below.
+ARG LLVM_VERSION
+LABEL com.toygine2.sdk.llvm.version="${LLVM_VERSION}"

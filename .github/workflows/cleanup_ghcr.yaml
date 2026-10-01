@@ -31,8 +31,10 @@ jobs:
         # Every image published by a build_<image>.yaml caller; add new targets here too.
         include:
           - image: 3ds
+          - image: clang
           - image: gba
           - image: gc
+          - image: gcc
           - image: md
           - image: n64
           - image: nds

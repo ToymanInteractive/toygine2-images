@@ -1,0 +1,116 @@
+name: Update GCC release
+
+on:
+  schedule:
+    # Weekly on Saturday 01:00 UTC
+    - cron: "0 1 * * 6"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  update:
+    concurrency:
+      group: update-gcc-release
+      cancel-in-progress: false
+    name: Bump GCC release
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      pull-requests: write
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Resolve latest GCC release
+        id: gcc
+        # gnu/gcc/ holds only releases, so the highest gcc-X.Y.Z/ is the newest stable one, a new
+        # major included.
+        run: |
+          listing=$(curl -fsSL --retry 3 https://ftp.gnu.org/gnu/gcc/)
+          latest=$(grep -oP 'href="gcc-\K[0-9]+\.[0-9]+\.[0-9]+(?=/")' <<< "${listing}" \
+            | sort -uV | tail -1)
+          # The version goes into sed and a download URL, so allow only version characters.
+          if ! [[ "${latest}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Failed to resolve the latest GCC release: '${latest}'" >&2
+            exit 1
+          fi
+          current=$(grep -oP '^ARG GCC_VERSION=\K\S+' Dockerfile.gcc) || {
+            echo "::error::Failed to extract GCC_VERSION from Dockerfile.gcc" >&2
+            exit 1
+          }
+          echo "current=${current}"
+          echo "latest=${latest}"
+          changed=true
+          if [ "${current}" = "${latest}" ]; then
+            changed=false
+            echo "Already up to date."
+          fi
+          {
+            echo "version=${latest}"
+            echo "major=${latest%%.*}"
+            echo "current=${current}"
+            echo "changed=${changed}"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Verify the release signature
+        id: verify
+        if: steps.gcc.outputs.changed == 'true'
+        # GCC publishes only a signature, so the sha256 is pinned from a tarball that passes gpgv
+        # against the GNU keyring.
+        env:
+          VERSION: ${{ steps.gcc.outputs.version }}
+        run: |
+          cd "${RUNNER_TEMP}"
+          base="https://ftp.gnu.org/gnu/gcc/gcc-${VERSION}/gcc-${VERSION}.tar.xz"
+          curl -fsSL --retry 3 -o gcc.tar.xz "${base}"
+          curl -fsSL --retry 3 -o gcc.tar.xz.sig "${base}.sig"
+          curl -fsSL --retry 3 -o gnu-keyring.gpg https://ftp.gnu.org/gnu/gnu-keyring.gpg
+          gpgv --keyring "${RUNNER_TEMP}/gnu-keyring.gpg" gcc.tar.xz.sig gcc.tar.xz
+          sha256=$(sha256sum gcc.tar.xz | cut -d' ' -f1)
+          echo "sha256=${sha256}" >> "${GITHUB_OUTPUT}"
+
+      - name: Update Dockerfile.gcc
+        if: steps.gcc.outputs.changed == 'true'
+        env:
+          LATEST: ${{ steps.gcc.outputs.version }}
+          LATEST_SHA256: ${{ steps.verify.outputs.sha256 }}
+        run: |
+          sed -i \
+            -e "s/^ARG GCC_VERSION=.*/ARG GCC_VERSION=${LATEST}/" \
+            -e "s/^ARG GCC_SHA256=.*/ARG GCC_SHA256=${LATEST_SHA256}/" \
+            Dockerfile.gcc
+          updated=$(grep -oP '^ARG GCC_VERSION=\K\S+' Dockerfile.gcc)
+          updated_sha256=$(grep -oP '^ARG GCC_SHA256=\K[0-9a-f]+' Dockerfile.gcc)
+          if [ "${updated}" != "${LATEST}" ] || [ "${updated_sha256}" != "${LATEST_SHA256}" ]; then
+            echo "::error::Failed to update GCC_VERSION/GCC_SHA256 in Dockerfile.gcc" >&2
+            exit 1
+          fi
+
+      - name: Create Pull Request
+        if: steps.gcc.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@v8.1.1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          sign-commits: true
+          branch: chore/bump-gcc-release
+          delete-branch: true
+          commit-message: "chore(deps): bump GCC to ${{ steps.gcc.outputs.version }}"
+          title: "chore(deps): bump GCC to ${{ steps.gcc.outputs.version }}"
+          assignees: dkrutskikh
+          body: |
+            Automated weekly bump of the pinned GCC release in `Dockerfile.gcc`.
+
+            - From: `${{ steps.gcc.outputs.current }}`
+            - To: `${{ steps.gcc.outputs.version }}` (latest release)
+            - `gcc-${{ steps.gcc.outputs.version }}.tar.xz` sha256: `${{ steps.verify.outputs.sha256 }}`, taken after `gpgv` checked the release signature against `gnu-keyring.gpg`
+            - Archive: https://ftp.gnu.org/gnu/gcc/gcc-${{ steps.gcc.outputs.version }}/
+            - Changes: https://gcc.gnu.org/gcc-${{ steps.gcc.outputs.major }}/changes.html

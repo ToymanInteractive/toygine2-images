@@ -4,11 +4,13 @@ Docker images for toygine2 CI/CD pipelines, automatically rebuilt when upstream 
 
 ## Images
 
-| Image                  | Description                                                                                                                             |
-| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| toygine2.gba.toolchain | [devkitARM](https://devkitpro.org/wiki/Getting_Started) toolchain for building ToyGine2 targeting the Nintendo Game Boy Advance         |
-| toygine2.md.toolchain  | [ClownMDSDK](https://github.com/Clownacy/clownmdsdk) toolchain for building ToyGine2 targeting the Sega Mega Drive/Genesis (`m68k-elf`) |
-| toygine2.n64.toolchain | [Libdragon](https://github.com/DragonMinded/libdragon) toolchain for building ToyGine2 targeting the Nintendo 64 (`mips64-elf`)         |
+| Image                    | Description                                                                                                                             |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------- |
+| toygine2.gba.toolchain   | [devkitARM](https://devkitpro.org/wiki/Getting_Started) toolchain for building ToyGine2 targeting the Nintendo Game Boy Advance         |
+| toygine2.md.toolchain    | [ClownMDSDK](https://github.com/Clownacy/clownmdsdk) toolchain for building ToyGine2 targeting the Sega Mega Drive/Genesis (`m68k-elf`) |
+| toygine2.n64.toolchain   | [Libdragon](https://github.com/DragonMinded/libdragon) toolchain for building ToyGine2 targeting the Nintendo 64 (`mips64-elf`)         |
+| toygine2.gcc.toolchain   | [GCC](https://gcc.gnu.org/) built from the latest release for building and testing ToyGine2 on Linux                                    |
+| toygine2.clang.toolchain | [Clang](https://clang.llvm.org/) with libc++ from the latest LLVM release for building and testing ToyGine2 on Linux                    |
 
 ### GBA (Nintendo Game Boy Advance)
 
@@ -73,3 +75,35 @@ docker run --rm -v "$PWD":/workspace -w /workspace \
 ```
 
 The image ships no emulator yet, so ROMs are built in CI but not run.
+
+### GCC (Linux host)
+
+`Dockerfile.gcc` builds the latest [GCC](https://gcc.gnu.org/) release (C and C++ only) from source for building and testing ToyGine2 on Linux. Debian's own GCC is older, and Ubuntu 26.04 ships only a pre-release GCC 16 snapshot.
+
+The compiler is installed into `/usr/local`, so `gcc`, `g++`, `c++` and a `cc` symlink are on `PATH`, and CMake and make find them without `CC` or `CXX`. Its `libstdc++` is registered with the dynamic loader, so test binaries run against it rather than Debian's older copy. The image also contains binutils, CMake, Ninja, make and git.
+
+The version and the tarball's sha256 are pinned in the Dockerfile. A weekly workflow checks for a new GCC release, verifies its GNU signature and opens a pull request with the new pin.
+
+Run (configure, build and test a CMake project mounted from the host):
+
+```sh
+docker run --rm --user "$(id -u):$(id -g)" -v "$PWD":/workspace -w /workspace \
+    ghcr.io/toymaninteractive/toygine2.gcc.toolchain:latest \
+    sh -c 'cmake --preset linux-release && cmake --build --preset linux-release && ctest --preset linux-release'
+```
+
+### Clang (Linux host)
+
+`Dockerfile.clang` packages the latest [LLVM](https://llvm.org/) release for building and testing ToyGine2 on Linux with libc++. clang, libc++, libc++abi, libunwind and compiler-rt come from the official release archive. lld is rebuilt from the same release's sources, because the archive's lld needs ICU 70 from Ubuntu 22.04 and Debian ships ICU 76. The image has no GCC compiler and no libstdc++.
+
+Everything is installed into `/usr/local`. Config files next to the compiler (`clang.cfg`, `clang++.cfg`) make libc++, lld, compiler-rt and libunwind the defaults, so `clang++ main.cpp` and a plain CMake configure need no extra flags. `cc` and `c++` point to `clang` and `clang++` and use the same defaults. The image has no libstdc++ headers, so `-stdlib=libstdc++` does not work here; use the GCC image for that. CMake picks `llvm-ar` and `llvm-ranlib` for Clang by itself.
+
+The version and the checksums of the release archives and the source tarball are pinned in the Dockerfile. A weekly workflow takes them from the latest LLVM release and opens a pull request with the new pin.
+
+Run (configure, build and test a CMake project mounted from the host):
+
+```sh
+docker run --rm --user "$(id -u):$(id -g)" -v "$PWD":/workspace -w /workspace \
+    ghcr.io/toymaninteractive/toygine2.clang.toolchain:latest \
+    sh -c 'cmake --preset linux-release && cmake --build --preset linux-release && ctest --preset linux-release'
+```
