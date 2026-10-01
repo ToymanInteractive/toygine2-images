@@ -1,7 +1,8 @@
 # Latest stable Clang with libc++ for building and testing ToyGine2 on Linux.
 #
-# clang, lld, libc++/libc++abi/libunwind and compiler-rt come from the official LLVM release. The
-# image has no GCC compiler or libstdc++; its only GCC piece is libatomic1, which libc++ links.
+# clang, clang-tidy, clang-format, lld, libc++/libc++abi/libunwind and compiler-rt come from the
+# official LLVM release. The image has no GCC compiler or libstdc++ headers; libc++ links GCC's
+# libatomic1, and the release's clang-tidy and clang-format link the base image's libstdc++.
 # Config files next to clang make libc++, lld and compiler-rt the defaults.
 #   stage1  lld-builder   lld rebuilt from the release sources
 #   stage2  llvm-builder  the rest extracted from the release archive into /usr/local
@@ -74,10 +75,11 @@ ARG TARGETARCH
 
 # The archive is about 1 GB, over 11 GB unpacked, so tar takes only what the image ships: the
 # drivers, the ld.lld name (lld comes from stage 1), the binutils CMake uses for Clang,
-# llvm-symbolizer for sanitizer traces, llvm-cov for coverage, the resource directory, and
-# libc++/libc++abi/libunwind with headers. Versioned paths derive from LLVM_VERSION, so a major
-# bump only changes the ARGs.
-# --long=31: the archive uses a 1 GB zstd window.
+# llvm-symbolizer for sanitizer traces, llvm-cov for coverage, clang-tidy and clang-format for
+# lint jobs, the resource directory, and libc++/libc++abi/libunwind with headers. Versioned paths
+# derive from LLVM_VERSION, so a major bump only changes the ARGs.
+# --long=31: the archive uses a 1 GB zstd window. The release ships clang-tidy with its symbol
+# table; stripping it saves about 60 MB at the cost of symbol names in its crash backtraces.
 RUN case "${TARGETARCH}" in \
     amd64) arch=X64 sha256="${LLVM_SHA256_AMD64}" ;; \
     arm64) arch=ARM64 sha256="${LLVM_SHA256_ARM64}" ;; \
@@ -95,12 +97,13 @@ RUN case "${TARGETARCH}" in \
     "${name}/bin/ld.lld" \
     "${name}/bin/llvm-ar" "${name}/bin/llvm-ranlib" "${name}/bin/llvm-nm" \
     "${name}/bin/llvm-objcopy" "${name}/bin/llvm-strip" "${name}/bin/llvm-symbolizer" \
-    "${name}/bin/llvm-cov" \
+    "${name}/bin/llvm-cov" "${name}/bin/clang-tidy" "${name}/bin/clang-format" \
     "${name}/lib/clang/${major}" \
     "${name}/lib/${triple}/libc++.so*" "${name}/lib/${triple}/libc++.a" \
     "${name}/lib/${triple}/libc++experimental.a" \
     "${name}/lib/${triple}/libc++abi.*" "${name}/lib/${triple}/libunwind.*" \
     "${name}/include/c++/v1" "${name}/include/${triple}/c++/v1" \
+    && /usr/local/bin/llvm-strip /usr/local/bin/clang-tidy /usr/local/bin/clang-format \
     && rm /tmp/llvm.tar.zst
 
 COPY --from=lld-builder /opt/lld/bin/lld /usr/local/bin/lld
@@ -116,6 +119,9 @@ RUN printf '%s\n' -fuse-ld=lld -rtlib=compiler-rt -unwindlib=libunwind > /usr/lo
 
 # Smoke test: C++23 from libc++ with the config defaults; ldd must show libc++ and neither
 # libstdc++ nor libgcc_s. The rpath is needed only here; the final image uses ld.so.conf.
+# clang-tidy reads clang++.cfg only when the compile command names the driver by absolute path,
+# as CMake's compile_commands.json does; otherwise it misses libc++ and fails on <expected>. A
+# compile error fails clang-tidy; the one check runs the engine and stays silent on clean code.
 RUN printf '%s\n' '#include <expected>' '#include <print>' \
     'std::expected<int, int> answer() { return 42; }' \
     'int main() { std::print("{}\n", answer().value()); }' > /tmp/smoke.cpp \
@@ -125,8 +131,13 @@ RUN printf '%s\n' '#include <expected>' '#include <print>' \
     && ldd /tmp/smoke > /tmp/smoke.ldd \
     && grep -q 'libc++\.so\.1' /tmp/smoke.ldd \
     && ! grep -qE 'libstdc\+\+|libgcc_s' /tmp/smoke.ldd \
-    && clang++ --version \
-    && rm /tmp/smoke /tmp/smoke.cpp /tmp/smoke.ldd
+    && printf '[{"directory": "/tmp", "file": "/tmp/smoke.cpp", "command": "%s"}]' \
+    '/usr/local/bin/clang++ -std=c++23 -c smoke.cpp' > /tmp/compile_commands.json \
+    && clang-tidy -p /tmp --checks='-*,modernize-use-nullptr' --warnings-as-errors='*' \
+    /tmp/smoke.cpp \
+    && clang-format --style=LLVM --dry-run -Werror /tmp/smoke.cpp \
+    && clang++ --version && clang-tidy --version && clang-format --version \
+    && rm /tmp/smoke /tmp/smoke.cpp /tmp/smoke.ldd /tmp/compile_commands.json
 
 # --- Stage 3: lcov builder ---
 FROM debian:trixie-slim AS lcov-builder
