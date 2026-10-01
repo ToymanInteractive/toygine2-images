@@ -98,11 +98,13 @@ docker run --rm --user "$(id -u):$(id -g)" -v "$PWD":/workspace -w /workspace \
 
 ### Clang (Linux host)
 
-`Dockerfile.clang` packages the latest [LLVM](https://llvm.org/) release for building and testing ToyGine2 on Linux with libc++. clang, libc++, libc++abi, libunwind and compiler-rt come from the official release archive. lld is rebuilt from the same release's sources, because the archive's lld needs ICU 70 from Ubuntu 22.04 and Debian ships ICU 76. The image has no GCC compiler and no libstdc++.
+`Dockerfile.clang` packages the latest [LLVM](https://llvm.org/) release for building and testing ToyGine2 on Linux with libc++. clang, clang-tidy, clang-format, libc++, libc++abi, libunwind and compiler-rt come from the official release archive. lld is rebuilt from the same release's sources, because the archive's lld needs ICU 70 from Ubuntu 22.04 and Debian ships ICU 76. The image has no GCC compiler.
 
 Everything is installed into `/usr/local`. Config files next to the compiler (`clang.cfg`, `clang++.cfg`) make libc++, lld, compiler-rt and libunwind the defaults, so `clang++ main.cpp` and a plain CMake configure need no extra flags. `cc` and `c++` point to `clang` and `clang++` and use the same defaults. The image has no libstdc++ headers, so `-stdlib=libstdc++` does not work here; use the GCC image for that. CMake picks `llvm-ar` and `llvm-ranlib` for Clang by itself.
 
 lcov is installed as in the GCC image. `gcov` is a symlink to `llvm-cov`, which runs in gcov mode under that name, so lcov and CMake scripts find it without `--gcov-tool`. lcov 2.x rejects some of Clang's coverage data (`unexpected line number '0'` for static initializers); capture with `--ignore-errors format,inconsistent`.
+
+clang-tidy loads `clang++.cfg`, and so libc++, only when the compile command gives the compiler's absolute path. CMake's `compile_commands.json` does, so `clang-tidy -p build` needs nothing extra. Without a compilation database, pass the config after `--`: `clang-tidy main.cpp -- --driver-mode=g++ --config=/usr/local/bin/clang++.cfg -std=c++23`.
 
 The version and the checksums of the release archives and the source tarball are pinned in the Dockerfile. A weekly workflow takes them from the latest LLVM release and opens a pull request with the new pin.
 
