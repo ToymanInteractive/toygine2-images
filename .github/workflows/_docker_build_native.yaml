@@ -162,13 +162,17 @@ jobs:
           # Per-platform ref: two concurrent mode=max exports to one ref overwrite each other.
           cache-to: type=registry,ref=ghcr.io/toymaninteractive/toygine2.${{ inputs.image }}.toolchain:buildcache-${{ matrix.arch }},mode=max
 
-      - name: Export digest
+      - name: Export digest and compiler version
         if: ${{ github.ref == 'refs/heads/main' }}
         env:
+          IMAGE: ghcr.io/toymaninteractive/toygine2.${{ inputs.image }}.toolchain
           DIGEST: ${{ steps.build.outputs.digest }}
+          COMPILER_VERSION: ${{ inputs.compiler-version }}
+        # Runs the untagged image natively; the merge job validates the output.
         run: |
           mkdir -p /tmp/digests
-          touch "/tmp/digests/${DIGEST#sha256:}"
+          docker run --rm "${IMAGE}@${DIGEST}" sh -c "$COMPILER_VERSION" \
+            > "/tmp/digests/${DIGEST#sha256:}"
 
       - name: Upload digest
         if: ${{ github.ref == 'refs/heads/main' }}
@@ -226,34 +230,31 @@ jobs:
         env:
           IMAGE: ghcr.io/toymaninteractive/toygine2.${{ inputs.image }}.toolchain
           VERSION: ${{ needs.prepare.outputs.version }}
-          COMPILER_VERSION: ${{ inputs.compiler-version }}
           COMPILER_TAG: ${{ inputs.compiler-tag }}
           GH_TOKEN: ${{ github.token }}
         run: |
-          # Each downloaded file is named after a digest and is empty on purpose. The array keeps
-          # every ref a single argument, with no dependence on word splitting (ShellCheck SC2046).
-          # YYYYMMDD as in _docker_build.yaml; a second build that day overwrites it.
+          # Each file is named after a digest and holds that platform's compiler version. The
+          # array keeps every ref a single argument (ShellCheck SC2046).
           refs=()
           for digest in *; do
             refs+=("${IMAGE}@sha256:${digest}")
           done
-          docker buildx imagetools create -t "${IMAGE}:${VERSION}" "${refs[@]}"
-          # The runner is amd64; arm64 builds the compiler from the same pins.
-          compiler=$(docker run --rm --platform linux/amd64 "${IMAGE}:${VERSION}" \
-            sh -c "$COMPILER_VERSION")
+          # Tag nothing unless both platforms printed the same version.
+          compiler=$(sort -u -- *)
           if [[ ! "$compiler" =~ ^[0-9]+(\.[0-9]+)*$ ]]; then
-            echo "::error::'$COMPILER_VERSION' printed '$compiler', not a version"
+            echo "::error::platforms printed '$compiler', not one version"
             exit 1
           fi
-          # A concurrency group does not order runs by commit, so an older run can publish last.
-          # latest and the compiler tag move only while main still points at this commit.
+          # YYYYMMDD as in _docker_build.yaml; a second build that day overwrites it.
+          # Queued runs finish in any order; an older one must not move latest or the compiler tag.
+          tags=(-t "${IMAGE}:${VERSION}")
           head=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq '.object.sha')
           if [ "$head" = "$GITHUB_SHA" ]; then
-            docker buildx imagetools create -t "${IMAGE}:latest" \
-              -t "${IMAGE}:${COMPILER_TAG}-${compiler}" "${IMAGE}:${VERSION}"
+            tags+=(-t "${IMAGE}:latest" -t "${IMAGE}:${COMPILER_TAG}-${compiler}")
           else
             echo "::warning::main moved to $head since $GITHUB_SHA; publishing $VERSION only"
           fi
+          docker buildx imagetools create "${tags[@]}" "${refs[@]}"
 
       - name: Inspect manifest
         env:
