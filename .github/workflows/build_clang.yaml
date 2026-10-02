@@ -28,6 +28,9 @@ jobs:
     uses: ./.github/workflows/_docker_build_native.yaml
     with:
       image: clang
+      # clang lacks -dumpfullversion, but its -dumpversion prints the full version.
+      compiler-version: clang -dumpversion
+      compiler-tag: clang
       # Cold build (lld from source): 25 min on an arm64 Mac with an 8 GB Docker VM. Runners are
       # not measured yet; tighten after the first CI run.
       timeout: 120

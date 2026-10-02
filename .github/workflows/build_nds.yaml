@@ -28,3 +28,5 @@ jobs:
     uses: ./.github/workflows/_docker_build.yaml
     with:
       image: nds
+      compiler-version: $DEVKITARM/bin/arm-none-eabi-gcc -dumpfullversion
+      compiler-tag: gcc

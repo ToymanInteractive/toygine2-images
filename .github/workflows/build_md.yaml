@@ -28,6 +28,8 @@ jobs:
     uses: ./.github/workflows/_docker_build_native.yaml
     with:
       image: md
+      compiler-version: m68k-elf-gcc -dumpfullversion
+      compiler-tag: gcc
       # ClownMDSDK (incl. GCC) and BlastEm compile from source. A cold build on native runners
       # took 16 min on amd64 and 13 on arm64; the rest is headroom for a slow runner.
       timeout: 180

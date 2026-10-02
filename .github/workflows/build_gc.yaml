@@ -28,3 +28,5 @@ jobs:
     uses: ./.github/workflows/_docker_build.yaml
     with:
       image: gc
+      compiler-version: $DEVKITPPC/bin/powerpc-eabi-gcc -dumpfullversion
+      compiler-tag: gcc

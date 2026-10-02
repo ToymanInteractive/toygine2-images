@@ -28,6 +28,8 @@ jobs:
     uses: ./.github/workflows/_docker_build_native.yaml
     with:
       image: gcc
+      compiler-version: gcc -dumpfullversion
+      compiler-tag: gcc
       # Cold build: 9 min on a 10-core arm64 Mac, about 25 min expected on 4-core runners.
       # Tighten after the first CI run.
       timeout: 90

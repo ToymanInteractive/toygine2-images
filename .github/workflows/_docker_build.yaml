@@ -15,6 +15,14 @@ on:
         required: false
         type: number
         default: 30
+      compiler-version:
+        description: Command that prints the compiler version, run with sh -c in the image.
+        required: true
+        type: string
+      compiler-tag:
+        description: Prefix of the compiler version tag, such as gcc for gcc-16.2.0.
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -113,6 +121,7 @@ jobs:
           cache-from: type=registry,ref=ghcr.io/toymaninteractive/toygine2.${{ inputs.image }}.toolchain:buildcache
 
       - name: Build and push
+        id: push
         if: ${{ github.ref == 'refs/heads/main' }}
         uses: docker/build-push-action@v7.4.0
         with:
@@ -128,3 +137,22 @@ jobs:
             org.opencontainers.image.version=${{ steps.build_date.outputs.version }}
           cache-from: type=registry,ref=ghcr.io/toymaninteractive/toygine2.${{ inputs.image }}.toolchain:buildcache
           cache-to: type=registry,ref=ghcr.io/toymaninteractive/toygine2.${{ inputs.image }}.toolchain:buildcache,mode=max
+
+      - name: Tag compiler version
+        if: ${{ github.ref == 'refs/heads/main' }}
+        env:
+          IMAGE: ghcr.io/toymaninteractive/toygine2.${{ inputs.image }}.toolchain
+          DIGEST: ${{ steps.push.outputs.digest }}
+          COMPILER_VERSION: ${{ inputs.compiler-version }}
+          COMPILER_TAG: ${{ inputs.compiler-tag }}
+        # The base image pins the compiler, so the step asks the pushed image for its version. It
+        # runs the amd64 build only; arm64 ships the same release.
+        run: |
+          compiler=$(docker run --rm --platform linux/amd64 "${IMAGE}@${DIGEST}" \
+            sh -c "$COMPILER_VERSION")
+          if [[ ! "$compiler" =~ ^[0-9]+(\.[0-9]+)*$ ]]; then
+            echo "::error::'$COMPILER_VERSION' printed '$compiler', not a version"
+            exit 1
+          fi
+          docker buildx imagetools create -t "${IMAGE}:${COMPILER_TAG}-${compiler}" \
+            "${IMAGE}@${DIGEST}"

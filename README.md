@@ -12,6 +12,16 @@ Docker images for toygine2 CI/CD pipelines, automatically rebuilt when upstream 
 | toygine2.gcc.toolchain   | [GCC](https://gcc.gnu.org/) built from the latest release for building and testing ToyGine2 on Linux                                    |
 | toygine2.clang.toolchain | [Clang](https://clang.llvm.org/) with libc++ from the latest LLVM release for building and testing ToyGine2 on Linux                    |
 
+Every build on `main` publishes `latest`, the UTC build date (`20261002`) and the compiler version: `clang-<version>` in the Clang image, `gcc-<version>` elsewhere (`gcc-16.2.0` for GCC, `gcc-16.1.0` for devkitARM). The compiler tag follows later builds with the same compiler, so a workflow pinned to it keeps its compiler and still gets updates to the rest of the image.
+
+To pin the whole image, use its digest (`@sha256:...`). Nightly cleanup keeps `latest`, every compiler tag and the 10 newest dated builds, so a dated tag lasts about 10 rebuilds.
+
+```yaml
+build:
+  runs-on: ubuntu-latest
+  container: ghcr.io/toymaninteractive/toygine2.gcc.toolchain:gcc-16.2.0
+```
+
 Every image has `python3` for the helper scripts toygine2 CI runs inside the container, such as `tools/builder/bmf_from_csv.py`. The devkitPro base images already include it, and the Debian-based images install it.
 
 Every image also has the [GitHub CLI](https://cli.github.com/) (`gh`) in `/usr/local/bin`. Debian packages only 2.23 (bookworm, the devkitPro base) and 2.46 (trixie), so the images download a pinned upstream release and verify its sha256. Because the download runs on the build platform, the relabel-only devkitPro images still build without emulation.
