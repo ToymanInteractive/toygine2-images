@@ -2,7 +2,8 @@
 #
 # Thin wrapper over the upstream devkitpro/devkitppc image, pinned to a date tag and annotated
 # with OCI labels for the toygine2 CI and registry. devkitPro ships the cross-compiler and the
-# platform libraries (wut) ToyGine2's Makefiles use; the image adds only the GitHub CLI (gh).
+# platform libraries (wut) ToyGine2's Makefiles use; the image adds only the GitHub CLI (gh) and
+# a git safe.directory setting.
 #
 # Usage (same as the other toygine2 images):
 #   docker build -t toygine2-wiiu - < Dockerfile.wiiu
@@ -45,6 +46,14 @@ RUN case "${TARGETARCH}" in \
 
 # --- Stage 2: final image ---
 FROM devkitpro/devkitppc:20260503
+
+# A mounted checkout is owned by the host user, so git as root fails with "dubious ownership".
+# System-wide so --user uids (HOME=/) see it too. COPY: a RUN would need arm64 emulation.
+# The base ships no /etc/gitconfig to overwrite.
+COPY <<EOF /etc/gitconfig
+[safe]
+	directory = *
+EOF
 
 COPY --from=gh-fetch /tmp/gh/gh /usr/local/bin/gh
 

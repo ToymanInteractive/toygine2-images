@@ -28,5 +28,7 @@ jobs:
     uses: ./.github/workflows/_docker_build_native.yaml
     with:
       image: gba
+      compiler-version: $DEVKITARM/bin/arm-none-eabi-gcc -dumpfullversion
+      compiler-tag: gcc
       # mGBA compiles from source; one emulated job built both platforms in 13 min, so 60 fits.
       timeout: 60

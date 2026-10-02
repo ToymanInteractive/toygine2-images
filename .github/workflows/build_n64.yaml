@@ -28,6 +28,8 @@ jobs:
     uses: ./.github/workflows/_docker_build_native.yaml
     with:
       image: n64
+      compiler-version: mips64-elf-gcc -dumpfullversion
+      compiler-tag: gcc
       # Libdragon's toolchain (binutils, GCC, newlib) and its library compile from source. Not
       # measured on CI runners yet: a cold local build on arm64 took 27 min with 4 jobs, and the
       # rest is headroom for a slow runner.

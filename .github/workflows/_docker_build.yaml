@@ -15,6 +15,14 @@ on:
         required: false
         type: number
         default: 30
+      compiler-version:
+        description: Command that prints the compiler version, run with sh -c in the image.
+        required: true
+        type: string
+      compiler-tag:
+        description: Prefix of the compiler version tag, such as gcc for gcc-16.2.0.
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -81,23 +89,12 @@ jobs:
         id: build_date
         # One UTC date feeds both the date tag and the version label, so a build
         # started just before midnight cannot tag 20260731 while labelling 20260801.
-        # Only build-time values the Dockerfile can't know go here; static per-image
-        # labels (title/description/versions) live in each Dockerfile and must not be
-        # overridden by metadata-action's repo-level defaults.
+        # Only build-time values go here; static labels live in each Dockerfile.
         run: |
           {
             echo "created=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
             echo "version=$(date -u +%Y%m%d)"
           } >> "$GITHUB_OUTPUT"
-
-      - name: Extract metadata
-        id: meta
-        uses: docker/metadata-action@v6.2.0
-        with:
-          images: ghcr.io/toymaninteractive/toygine2.${{ inputs.image }}.toolchain
-          tags: |
-            type=raw,value=latest
-            type=raw,value=${{ steps.build_date.outputs.version }}
 
       - name: Build only
         if: ${{ github.ref != 'refs/heads/main' }}
@@ -113,6 +110,7 @@ jobs:
           cache-from: type=registry,ref=ghcr.io/toymaninteractive/toygine2.${{ inputs.image }}.toolchain:buildcache
 
       - name: Build and push
+        id: push
         if: ${{ github.ref == 'refs/heads/main' }}
         uses: docker/build-push-action@v7.4.0
         with:
@@ -120,11 +118,39 @@ jobs:
           file: Dockerfile.${{ inputs.image }}
           platforms: linux/amd64,linux/arm64
           provenance: false
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
+          # Untagged until the compiler check in the next step passes.
+          outputs: type=image,name=ghcr.io/toymaninteractive/toygine2.${{ inputs.image }}.toolchain,push-by-digest=true,name-canonical=true,push=true
           labels: |
             org.opencontainers.image.created=${{ steps.build_date.outputs.created }}
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.version=${{ steps.build_date.outputs.version }}
           cache-from: type=registry,ref=ghcr.io/toymaninteractive/toygine2.${{ inputs.image }}.toolchain:buildcache
           cache-to: type=registry,ref=ghcr.io/toymaninteractive/toygine2.${{ inputs.image }}.toolchain:buildcache,mode=max
+
+      - name: Publish tags
+        if: ${{ github.ref == 'refs/heads/main' }}
+        env:
+          IMAGE: ghcr.io/toymaninteractive/toygine2.${{ inputs.image }}.toolchain
+          DIGEST: ${{ steps.push.outputs.digest }}
+          VERSION: ${{ steps.build_date.outputs.version }}
+          COMPILER_VERSION: ${{ inputs.compiler-version }}
+          COMPILER_TAG: ${{ inputs.compiler-tag }}
+          GH_TOKEN: ${{ github.token }}
+        # The base image pins the compiler, so the step asks the pushed image for its version. It
+        # runs the amd64 build only; arm64 ships the same release.
+        run: |
+          compiler=$(docker run --rm --platform linux/amd64 "${IMAGE}@${DIGEST}" \
+            sh -c "$COMPILER_VERSION")
+          if [[ ! "$compiler" =~ ^[0-9]+(\.[0-9]+)*$ ]]; then
+            echo "::error::'$COMPILER_VERSION' printed '$compiler', not a version"
+            exit 1
+          fi
+          # A re-run of an older commit must not roll latest or the compiler tag back.
+          tags=(-t "${IMAGE}:${VERSION}")
+          head=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq '.object.sha')
+          if [ "$head" = "$GITHUB_SHA" ]; then
+            tags+=(-t "${IMAGE}:latest" -t "${IMAGE}:${COMPILER_TAG}-${compiler}")
+          else
+            echo "::warning::main moved to $head since $GITHUB_SHA; publishing $VERSION only"
+          fi
+          docker buildx imagetools create "${tags[@]}" "${IMAGE}@${DIGEST}"

@@ -204,6 +204,10 @@ RUN apt-get update -qq && apt-get install -y --no-install-recommends \
     libgmp10 libmpfr6 libmpc3 libzstd1 libgles2 libsdl2-2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
+# A mounted checkout is owned by the host user, so git as root fails with "dubious ownership".
+# System-wide so --user uids (HOME=/) see it too.
+RUN git config --system --add safe.directory '*'
+
 COPY --from=toolchain-builder /opt/clownmdsdk /opt/clownmdsdk
 COPY --from=blastem-builder /opt/blastem /opt/blastem
 COPY --from=gh-fetch /tmp/gh/gh /usr/local/bin/gh

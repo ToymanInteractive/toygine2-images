@@ -28,3 +28,5 @@ jobs:
     uses: ./.github/workflows/_docker_build.yaml
     with:
       image: switch
+      compiler-version: $DEVKITPRO/devkitA64/bin/aarch64-none-elf-gcc -dumpfullversion
+      compiler-tag: gcc
