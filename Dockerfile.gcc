@@ -138,6 +138,10 @@ RUN apt-get update -qq && apt-get install -y --no-install-recommends \
     perl libcapture-tiny-perl libdatetime-perl libtimedate-perl \
     && rm -rf /var/lib/apt/lists/*
 
+# A mounted checkout is owned by the host user, so git as root fails with "dubious ownership".
+# System-wide so --user uids (HOME=/) see it too.
+RUN git config --system --add safe.directory '*'
+
 COPY --from=gcc-builder /usr/local /usr/local
 COPY --from=lcov-builder /opt/lcov/usr/local /usr/local
 

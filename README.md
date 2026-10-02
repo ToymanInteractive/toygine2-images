@@ -30,6 +30,8 @@ release:
         GH_TOKEN: ${{ github.token }}
 ```
 
+Every image also sets `safe.directory = *` in `/etc/gitconfig`. A mounted checkout belongs to the host user, so without it git stops with `detected dubious ownership` whenever it runs as another uid, such as root in a container started without `--user`.
+
 ### GBA (Nintendo Game Boy Advance)
 
 `Dockerfile.gba` extends the upstream [devkitARM](https://devkitpro.org/wiki/Getting_Started) image for building ToyGine2 targeting the Nintendo Game Boy Advance.

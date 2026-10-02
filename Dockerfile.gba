@@ -113,6 +113,10 @@ RUN case "${TARGETARCH}" in \
 # --- Stage 4: final image ---
 FROM devkitpro/devkitarm:20260610
 
+# A mounted checkout is owned by the host user, so git as root fails with "dubious ownership".
+# System-wide so --user uids (HOME=/) see it too.
+RUN git config --system --add safe.directory '*'
+
 COPY --from=mgba-builder /tmp/mgba/build/mgba-headless /usr/local/bin/mgba-headless
 COPY --from=emibios-fetch /tmp/emibios/gba_bios.bin /usr/local/share/emibios/gba_bios.bin
 COPY --from=gh-fetch /tmp/gh/gh /usr/local/bin/gh
