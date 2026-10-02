@@ -7,7 +7,8 @@
 #   stage1  lld-builder   lld rebuilt from the release sources
 #   stage2  llvm-builder  the rest extracted from the release archive into /usr/local
 #   stage3  lcov-builder  lcov from its upstream release
-# The final image copies both /usr/local trees onto a slim base with CMake and Ninja.
+#   stage4  gh-fetch      the GitHub CLI (gh)
+# The final image copies both /usr/local trees and gh onto a slim base with CMake and Ninja.
 #
 # Usage (same as the other toygine2 images):
 #   docker build -t toygine2-clang - < Dockerfile.clang
@@ -24,6 +25,12 @@ ARG LLVM_SHA256_ARM64=143308c82f8e21707be7fdc135d5e0ddd9a46a377ca9f38befc716fd84
 # Bumped by hand from the release asset's digest; lcov has no update workflow.
 ARG LCOV_VERSION=2.5
 ARG LCOV_SHA256=7e5e5a154bd5f3557659c328cab376764e7abd238bb403c424472c296b175126
+
+# GitHub CLI release and archive sha256s, the same in every Dockerfile; update_gh_release.yaml
+# bumps them all at once.
+ARG GH_VERSION=2.102.0
+ARG GH_SHA256_AMD64=bb766f710eef8ede859c18578c72c327597cd4c8a85b06001b1f3843c6019386
+ARG GH_SHA256_ARM64=7862c86c72f43df3a2d93ddde6f473285b4e2af61b494849846827e513ef6484
 
 # --- Stage 1: lld builder ---
 FROM debian:trixie-slim AS lld-builder
@@ -165,7 +172,40 @@ RUN mkdir -p /tmp/lcov && cd /tmp/lcov \
     && rm -rf man lcov/html lcov/example lcov/tests \
     && cd / && rm -rf /tmp/lcov
 
-# --- Stage 4: final image ---
+# --- Stage 4: GitHub CLI fetch ---
+# gh is a static Go binary, so this stage runs on the build platform and arm64 needs no emulation.
+FROM --platform=$BUILDPLATFORM debian:trixie-slim AS gh-fetch
+
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
+# The slim base has no curl.
+RUN apt-get update -qq && apt-get install -y --no-install-recommends \
+    ca-certificates curl \
+    && rm -rf /var/lib/apt/lists/*
+
+ARG GH_VERSION
+ARG GH_SHA256_AMD64
+ARG GH_SHA256_ARM64
+ARG BUILDARCH
+ARG TARGETARCH
+
+# Asset names use Docker's arch names. --no-same-owner: the archive stores uid 1001, the runner
+# user. Smoke test: --version runs only for the build platform's binary.
+RUN case "${TARGETARCH}" in \
+    amd64) sha256="${GH_SHA256_AMD64}" ;; \
+    arm64) sha256="${GH_SHA256_ARM64}" ;; \
+    *) echo "Unsupported TARGETARCH: ${TARGETARCH}" >&2 && exit 1 ;; \
+    esac \
+    && name="gh_${GH_VERSION}_linux_${TARGETARCH}" \
+    && mkdir -p /tmp/gh && cd /tmp/gh \
+    && curl -fSL --retry 3 -o gh.tar.gz \
+    "https://github.com/cli/cli/releases/download/v${GH_VERSION}/${name}.tar.gz" \
+    && { [ -z "${sha256}" ] || echo "${sha256}  gh.tar.gz" | sha256sum -c -; } \
+    && tar -xzf gh.tar.gz --no-same-owner --strip-components=2 "${name}/bin/gh" \
+    && rm gh.tar.gz \
+    && if [ "${TARGETARCH}" = "${BUILDARCH}" ]; then ./gh --version; fi
+
+# --- Stage 5: final image ---
 FROM debian:trixie-slim
 
 # libc6-dev: glibc headers and crt files (no binutils: clang assembles, lld links, CMake uses
@@ -185,6 +225,8 @@ COPY --from=lcov-builder /opt/lcov/usr/local /usr/local
 # Lets tests find libc++.so.1 without an rpath or LD_LIBRARY_PATH.
 RUN echo "/usr/local/lib/$(uname -m)-unknown-linux-gnu" > /etc/ld.so.conf.d/000-local.conf \
     && ldconfig
+
+COPY --from=gh-fetch /tmp/gh/gh /usr/local/bin/gh
 
 ENV LANG=C.UTF-8
 
@@ -210,3 +252,5 @@ ARG LLVM_VERSION
 LABEL com.toygine2.sdk.llvm.version="${LLVM_VERSION}"
 ARG LCOV_VERSION
 LABEL com.toygine2.sdk.lcov.version="${LCOV_VERSION}"
+ARG GH_VERSION
+LABEL com.toygine2.sdk.gh.version="${GH_VERSION}"

@@ -8,6 +8,8 @@
 # Stage 2 downloads emibios, a redistributable GBA BIOS replacement. It ships as read-only data in
 # /usr/local/share/emibios/gba_bios.bin for `mgba-headless -b`.
 #
+# Stage 3 downloads the GitHub CLI (gh) into /usr/local/bin.
+#
 # Usage (same as the other toygine2 images):
 #   docker build -t toygine2-gba - < Dockerfile.gba
 #   docker run --rm -v "$PWD":/workspace -w /workspace toygine2-gba \
@@ -20,6 +22,12 @@ ARG MGBA_COMMIT=1d201b22a86d31dfb3bc75145403711f6762015f
 # Pinned emibios release and the sha256 of its gba_bios.bin; the update workflow bumps both.
 ARG EMIBIOS_VERSION=0.1.5
 ARG EMIBIOS_SHA256=f4614eb937a0bdad060828f08ca243b008bd8965b9d53090f352330997a7cd34
+
+# GitHub CLI release and archive sha256s, the same in every Dockerfile; update_gh_release.yaml
+# bumps them all at once.
+ARG GH_VERSION=2.102.0
+ARG GH_SHA256_AMD64=bb766f710eef8ede859c18578c72c327597cd4c8a85b06001b1f3843c6019386
+ARG GH_SHA256_ARM64=7862c86c72f43df3a2d93ddde6f473285b4e2af61b494849846827e513ef6484
 
 # --- Stage 1: mGBA builder ---
 FROM devkitpro/devkitarm:20260610 AS mgba-builder
@@ -74,11 +82,40 @@ RUN mkdir -p /tmp/emibios \
     "https://github.com/coolbho3k/emibios/releases/download/${EMIBIOS_VERSION}/gba_bios.bin" \
     && { [ -z "${EMIBIOS_SHA256}" ] || echo "${EMIBIOS_SHA256}  gba_bios.bin" | sha256sum -c -; }
 
-# --- Stage 3: final image ---
+# --- Stage 3: GitHub CLI fetch ---
+# gh is a static Go binary, so this stage runs on the build platform and arm64 needs no emulation.
+FROM --platform=$BUILDPLATFORM devkitpro/devkitarm:20260610 AS gh-fetch
+
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
+ARG GH_VERSION
+ARG GH_SHA256_AMD64
+ARG GH_SHA256_ARM64
+ARG BUILDARCH
+ARG TARGETARCH
+
+# Asset names use Docker's arch names. --no-same-owner: the archive stores uid 1001, the runner
+# user. Smoke test: --version runs only for the build platform's binary.
+RUN case "${TARGETARCH}" in \
+    amd64) sha256="${GH_SHA256_AMD64}" ;; \
+    arm64) sha256="${GH_SHA256_ARM64}" ;; \
+    *) echo "Unsupported TARGETARCH: ${TARGETARCH}" >&2 && exit 1 ;; \
+    esac \
+    && name="gh_${GH_VERSION}_linux_${TARGETARCH}" \
+    && mkdir -p /tmp/gh && cd /tmp/gh \
+    && curl -fSL --retry 3 -o gh.tar.gz \
+    "https://github.com/cli/cli/releases/download/v${GH_VERSION}/${name}.tar.gz" \
+    && { [ -z "${sha256}" ] || echo "${sha256}  gh.tar.gz" | sha256sum -c -; } \
+    && tar -xzf gh.tar.gz --no-same-owner --strip-components=2 "${name}/bin/gh" \
+    && rm gh.tar.gz \
+    && if [ "${TARGETARCH}" = "${BUILDARCH}" ]; then ./gh --version; fi
+
+# --- Stage 4: final image ---
 FROM devkitpro/devkitarm:20260610
 
 COPY --from=mgba-builder /tmp/mgba/build/mgba-headless /usr/local/bin/mgba-headless
 COPY --from=emibios-fetch /tmp/emibios/gba_bios.bin /usr/local/share/emibios/gba_bios.bin
+COPY --from=gh-fetch /tmp/gh/gh /usr/local/bin/gh
 
 LABEL org.opencontainers.image.authors="Toyman Interactive <https://github.com/ToymanInteractive>"
 LABEL org.opencontainers.image.url="https://github.com/ToymanInteractive/toygine2-images"
@@ -100,3 +137,5 @@ ARG MGBA_COMMIT
 ARG EMIBIOS_VERSION
 LABEL com.toygine2.sdk.mgba.commit="${MGBA_COMMIT}"
 LABEL com.toygine2.sdk.emibios.version="${EMIBIOS_VERSION}"
+ARG GH_VERSION
+LABEL com.toygine2.sdk.gh.version="${GH_VERSION}"

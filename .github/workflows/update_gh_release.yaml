@@ -1,0 +1,139 @@
+name: Update GitHub CLI release
+
+on:
+  schedule:
+    # Weekly on Saturday 01:00 UTC
+    - cron: "0 1 * * 6"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  update:
+    concurrency:
+      group: update-gh-release
+      cancel-in-progress: false
+    name: Bump GitHub CLI release
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Resolve latest GitHub CLI release
+        id: gh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # releases/latest skips drafts and pre-releases. The pins are upload digests, so nothing is
+        # downloaded.
+        run: |
+          release=$(curl -fsSL --retry 3 \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            https://api.github.com/repos/cli/cli/releases/latest)
+          tag=$(jq -r .tag_name <<< "${release}")
+          latest=${tag#v}
+          # The version goes into sed and a download URL, so allow only version characters.
+          if ! [[ "${latest}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Unexpected GitHub CLI release tag: '${tag}'" >&2
+            exit 1
+          fi
+          digest() {
+            jq -r --arg name "$1" '.assets[] | select(.name == $name) | .digest' <<< "${release}"
+          }
+          amd64=$(digest "gh_${latest}_linux_amd64.tar.gz")
+          arm64=$(digest "gh_${latest}_linux_arm64.tar.gz")
+          for d in "${amd64}" "${arm64}"; do
+            if ! [[ "${d}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+              echo "::error::Missing sha256 digest for an asset of GitHub CLI ${latest}: '${d}'" >&2
+              exit 1
+            fi
+          done
+          {
+            echo "version=${latest}"
+            echo "sha256_amd64=${amd64#sha256:}"
+            echo "sha256_arm64=${arm64#sha256:}"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Update Dockerfiles
+        id: update
+        env:
+          LATEST: ${{ steps.gh.outputs.version }}
+          LATEST_AMD64: ${{ steps.gh.outputs.sha256_amd64 }}
+          LATEST_ARM64: ${{ steps.gh.outputs.sha256_arm64 }}
+        # Every image ships gh, so a Dockerfile without the pins fails the job.
+        run: |
+          read_pins() {
+            grep -oP '^ARG GH_VERSION=\K\S+' "$1" \
+              && grep -oP '^ARG GH_SHA256_AMD64=\K[0-9a-f]*' "$1" \
+              && grep -oP '^ARG GH_SHA256_ARM64=\K[0-9a-f]*' "$1"
+          }
+          wanted="${LATEST} ${LATEST_AMD64} ${LATEST_ARM64}"
+          echo "latest=${wanted}"
+          versions=()
+          stale=()
+          for f in Dockerfile.*; do
+            pins=$(read_pins "${f}" | paste -sd' ') || {
+              echo "::error file=${f}::Failed to extract the GitHub CLI pins from ${f}" >&2
+              exit 1
+            }
+            echo "${f}: ${pins}"
+            v="${pins%% *}"
+            # releases/latest can lag behind a hand-set pin; never move a pin back.
+            if [ "${pins}" != "${wanted}" ] \
+              && [ "$(printf '%s\n' "${v}" "${LATEST}" | sort -V | tail -1)" = "${LATEST}" ]; then
+              versions+=("${v}")
+              stale+=("${f}")
+            fi
+          done
+          if [ "${#stale[@]}" -eq 0 ]; then
+            echo "changed=false" >> "${GITHUB_OUTPUT}"
+            echo "Nothing to bump (latest release ${LATEST})."
+            exit 0
+          fi
+          sed -i \
+            -e "s/^ARG GH_VERSION=.*/ARG GH_VERSION=${LATEST}/" \
+            -e "s/^ARG GH_SHA256_AMD64=.*/ARG GH_SHA256_AMD64=${LATEST_AMD64}/" \
+            -e "s/^ARG GH_SHA256_ARM64=.*/ARG GH_SHA256_ARM64=${LATEST_ARM64}/" \
+            "${stale[@]}"
+          for f in "${stale[@]}"; do
+            if [ "$(read_pins "${f}" | paste -sd' ')" != "${wanted}" ]; then
+              echo "::error file=${f}::Failed to update the GitHub CLI pins in ${f}" >&2
+              exit 1
+            fi
+          done
+          {
+            echo "changed=true"
+            echo "current=$(printf '%s\n' "${versions[@]}" | sort -uV | paste -sd',' | sed 's/,/, /g')"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Create Pull Request
+        if: steps.update.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@v8.1.1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          sign-commits: true
+          branch: chore/bump-gh-release
+          delete-branch: true
+          commit-message: "chore(deps): bump GitHub CLI to ${{ steps.gh.outputs.version }}"
+          title: "chore(deps): bump GitHub CLI to ${{ steps.gh.outputs.version }}"
+          assignees: dkrutskikh
+          body: |
+            Automated weekly bump of the pinned GitHub CLI release in every `Dockerfile.*`.
+
+            - From: `${{ steps.update.outputs.current }}`
+            - To: `${{ steps.gh.outputs.version }}` (latest release)
+            - `gh_${{ steps.gh.outputs.version }}_linux_amd64.tar.gz` sha256: `${{ steps.gh.outputs.sha256_amd64 }}`
+            - `gh_${{ steps.gh.outputs.version }}_linux_arm64.tar.gz` sha256: `${{ steps.gh.outputs.sha256_arm64 }}`
+            - Release: https://github.com/cli/cli/releases/tag/v${{ steps.gh.outputs.version }}

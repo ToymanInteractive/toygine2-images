@@ -1,15 +1,52 @@
 # Image with the devkitPro devkitPPC toolchain for building ToyGine2 targeting Nintendo Wii.
 #
 # Thin wrapper over the upstream devkitpro/devkitppc image, pinned to a date tag and annotated
-# with OCI labels for the toygine2 CI and registry. It adds no tooling: devkitPro already ships
-# the cross-compiler and the platform libraries (libogc) that ToyGine2's Makefiles use.
+# with OCI labels for the toygine2 CI and registry. devkitPro ships the cross-compiler and the
+# platform libraries (libogc) ToyGine2's Makefiles use; the image adds only the GitHub CLI (gh).
 #
 # Usage (same as the other toygine2 images):
 #   docker build -t toygine2-wii - < Dockerfile.wii
 #   docker run --rm -v "$PWD":/workspace -w /workspace toygine2-wii \
 #       make -C path/to/project
 
+# GitHub CLI release and archive sha256s, the same in every Dockerfile; update_gh_release.yaml
+# bumps them all at once.
+ARG GH_VERSION=2.102.0
+ARG GH_SHA256_AMD64=bb766f710eef8ede859c18578c72c327597cd4c8a85b06001b1f3843c6019386
+ARG GH_SHA256_ARM64=7862c86c72f43df3a2d93ddde6f473285b4e2af61b494849846827e513ef6484
+
+# --- Stage 1: GitHub CLI fetch ---
+# gh is a static Go binary, so this stage runs on the build platform and arm64 needs no emulation.
+FROM --platform=$BUILDPLATFORM devkitpro/devkitppc:20260503 AS gh-fetch
+
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
+ARG GH_VERSION
+ARG GH_SHA256_AMD64
+ARG GH_SHA256_ARM64
+ARG BUILDARCH
+ARG TARGETARCH
+
+# Asset names use Docker's arch names. --no-same-owner: the archive stores uid 1001, the runner
+# user. Smoke test: --version runs only for the build platform's binary.
+RUN case "${TARGETARCH}" in \
+    amd64) sha256="${GH_SHA256_AMD64}" ;; \
+    arm64) sha256="${GH_SHA256_ARM64}" ;; \
+    *) echo "Unsupported TARGETARCH: ${TARGETARCH}" >&2 && exit 1 ;; \
+    esac \
+    && name="gh_${GH_VERSION}_linux_${TARGETARCH}" \
+    && mkdir -p /tmp/gh && cd /tmp/gh \
+    && curl -fSL --retry 3 -o gh.tar.gz \
+    "https://github.com/cli/cli/releases/download/v${GH_VERSION}/${name}.tar.gz" \
+    && { [ -z "${sha256}" ] || echo "${sha256}  gh.tar.gz" | sha256sum -c -; } \
+    && tar -xzf gh.tar.gz --no-same-owner --strip-components=2 "${name}/bin/gh" \
+    && rm gh.tar.gz \
+    && if [ "${TARGETARCH}" = "${BUILDARCH}" ]; then ./gh --version; fi
+
+# --- Stage 2: final image ---
 FROM devkitpro/devkitppc:20260503
+
+COPY --from=gh-fetch /tmp/gh/gh /usr/local/bin/gh
 
 LABEL org.opencontainers.image.authors="Toyman Interactive <https://github.com/ToymanInteractive>"
 LABEL org.opencontainers.image.url="https://github.com/ToymanInteractive/toygine2-images"
@@ -25,3 +62,7 @@ LABEL org.opencontainers.image.base.name="docker.io/devkitpro/devkitppc:20260503
 
 LABEL com.toygine2.console="Nintendo Wii"
 LABEL com.toygine2.toolchain="devkitPPC"
+
+# Re-declared for the label below.
+ARG GH_VERSION
+LABEL com.toygine2.sdk.gh.version="${GH_VERSION}"
