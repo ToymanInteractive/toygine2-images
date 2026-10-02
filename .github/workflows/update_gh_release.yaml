@@ -89,16 +89,17 @@ jobs:
               exit 1
             }
             echo "${f}: ${pins}"
-            versions+=("${pins%% *}")
-            if [ "${pins}" != "${wanted}" ]; then
+            v="${pins%% *}"
+            # releases/latest can lag behind a hand-set pin; never move a pin back.
+            if [ "${pins}" != "${wanted}" ] \
+              && [ "$(printf '%s\n' "${v}" "${LATEST}" | sort -V | tail -1)" = "${LATEST}" ]; then
+              versions+=("${v}")
               stale+=("${f}")
             fi
           done
-          # releases/latest can lag behind a hand-set pin; never move a pin back.
-          newest=$(printf '%s\n' "${versions[@]}" "${LATEST}" | sort -V | tail -1)
-          if [ "${#stale[@]}" -eq 0 ] || [ "${newest}" != "${LATEST}" ]; then
+          if [ "${#stale[@]}" -eq 0 ]; then
             echo "changed=false" >> "${GITHUB_OUTPUT}"
-            echo "Nothing to bump (newest pin ${newest}, latest release ${LATEST})."
+            echo "Nothing to bump (latest release ${LATEST})."
             exit 0
           fi
           sed -i \
