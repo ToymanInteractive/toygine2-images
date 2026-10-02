@@ -10,7 +10,8 @@
 # It lands in /opt/clownmdsdk, which the final stage copies out of the builder.
 #
 # A parallel stage builds BlastEm from a pinned Mercurial changeset into /opt/blastem, for
-# running Mega Drive ROMs headless in CI (`blastem -t -b <frames> rom.bin`).
+# running Mega Drive ROMs headless in CI (`blastem -t -b <frames> rom.bin`). Another stage
+# downloads the GitHub CLI (gh) into /usr/local/bin.
 #
 # Usage (same as the other toygine2 images):
 #   docker build -t toygine2-md - < Dockerfile.md
@@ -22,6 +23,12 @@
 ARG CLOWNMDSDK_COMMIT=7bc06af715c86956dbac37252eb67033740bcc0f
 ARG GCC_VERSION=16.2.0
 ARG BLASTEM_COMMIT=9b71c8bd20654e8ac27b457fa55a8bc3b1d9446f
+
+# GitHub CLI release and archive sha256s, the same in every Dockerfile; update_gh_release.yaml
+# bumps them all at once.
+ARG GH_VERSION=2.102.0
+ARG GH_SHA256_AMD64=bb766f710eef8ede859c18578c72c327597cd4c8a85b06001b1f3843c6019386
+ARG GH_SHA256_ARM64=7862c86c72f43df3a2d93ddde6f473285b4e2af61b494849846827e513ef6484
 
 # --- Stage 1: ClownMDSDK toolchain builder ---
 FROM debian:trixie-slim AS toolchain-builder
@@ -142,7 +149,40 @@ RUN if [ "${SKIP_SMOKE_TEST}" != "1" ]; then \
     && /opt/blastem/blastem -t -b 60 /tmp/template-cartridge/bin/template-cartridge.bin; \
     fi
 
-# --- Stage 3: final image ---
+# --- Stage 3: GitHub CLI fetch ---
+# gh is a static Go binary, so this stage runs on the build platform and arm64 needs no emulation.
+FROM --platform=$BUILDPLATFORM debian:trixie-slim AS gh-fetch
+
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
+# The slim base has no curl.
+RUN apt-get update -qq && apt-get install -y --no-install-recommends \
+    ca-certificates curl \
+    && rm -rf /var/lib/apt/lists/*
+
+ARG GH_VERSION
+ARG GH_SHA256_AMD64
+ARG GH_SHA256_ARM64
+ARG BUILDARCH
+ARG TARGETARCH
+
+# Asset names use Docker's arch names. --no-same-owner: the archive stores uid 1001, the runner
+# user. Smoke test: --version runs only for the build platform's binary.
+RUN case "${TARGETARCH}" in \
+    amd64) sha256="${GH_SHA256_AMD64}" ;; \
+    arm64) sha256="${GH_SHA256_ARM64}" ;; \
+    *) echo "Unsupported TARGETARCH: ${TARGETARCH}" >&2 && exit 1 ;; \
+    esac \
+    && name="gh_${GH_VERSION}_linux_${TARGETARCH}" \
+    && mkdir -p /tmp/gh && cd /tmp/gh \
+    && curl -fSL --retry 3 -o gh.tar.gz \
+    "https://github.com/cli/cli/releases/download/v${GH_VERSION}/${name}.tar.gz" \
+    && { [ -z "${sha256}" ] || echo "${sha256}  gh.tar.gz" | sha256sum -c -; } \
+    && tar -xzf gh.tar.gz --no-same-owner --strip-components=2 "${name}/bin/gh" \
+    && rm gh.tar.gz \
+    && if [ "${TARGETARCH}" = "${BUILDARCH}" ]; then ./gh --version; fi
+
+# --- Stage 4: final image ---
 FROM debian:trixie-slim
 
 # make: Makefile projects (cartridge.mk/generic.mk); cmake: toolchain.cmake; ninja-build: the
@@ -166,6 +206,7 @@ RUN apt-get update -qq && apt-get install -y --no-install-recommends \
 
 COPY --from=toolchain-builder /opt/clownmdsdk /opt/clownmdsdk
 COPY --from=blastem-builder /opt/blastem /opt/blastem
+COPY --from=gh-fetch /tmp/gh/gh /usr/local/bin/gh
 
 ENV LANG=C.UTF-8
 ENV CLOWNMDSDK=/opt/clownmdsdk
@@ -196,3 +237,5 @@ ARG BLASTEM_COMMIT
 LABEL com.toygine2.sdk.clownmdsdk.commit="${CLOWNMDSDK_COMMIT}"
 LABEL com.toygine2.sdk.gcc.version="${GCC_VERSION}"
 LABEL com.toygine2.sdk.blastem.commit="${BLASTEM_COMMIT}"
+ARG GH_VERSION
+LABEL com.toygine2.sdk.gh.version="${GH_VERSION}"

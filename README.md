@@ -14,6 +14,16 @@ Docker images for toygine2 CI/CD pipelines, automatically rebuilt when upstream 
 
 Every image has `python3` for the helper scripts toygine2 CI runs inside the container, such as `tools/builder/bmf_from_csv.py`. The devkitPro base images already include it, and the Debian-based images install it.
 
+Every image also has the [GitHub CLI](https://cli.github.com/) (`gh`) in `/usr/local/bin`. Debian packages only 2.23 (bookworm, the devkitPro base) and 2.46 (trixie), so the images download a pinned upstream release and verify its sha256. Because the download runs on the build platform, the relabel-only devkitPro images still build without emulation.
+
+A weekly workflow bumps the pin in every Dockerfile in one pull request. Pass the token as `GH_TOKEN`:
+
+```yaml
+- run: gh release upload "$TAG" build/rom.gba
+  env:
+    GH_TOKEN: ${{ github.token }}
+```
+
 ### GBA (Nintendo Game Boy Advance)
 
 `Dockerfile.gba` extends the upstream [devkitARM](https://devkitpro.org/wiki/Getting_Started) image for building ToyGine2 targeting the Nintendo Game Boy Advance.

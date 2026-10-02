@@ -1,8 +1,8 @@
 name: Build Docker image (native)
 
 # Reusable build/publish logic for images that compile from source: each platform builds on its
-# own runner and a final job assembles the manifest list. Images that only relabel a base run no
-# command while building, so they stay on _docker_build.yaml with one runner for both platforms.
+# own runner and a final job assembles the manifest list. Images that run nothing on the target
+# platform stay on _docker_build.yaml, with one runner for both.
 on:
   workflow_call:
     inputs:
