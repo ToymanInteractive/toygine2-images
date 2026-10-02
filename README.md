@@ -16,12 +16,18 @@ Every image has `python3` for the helper scripts toygine2 CI runs inside the con
 
 Every image also has the [GitHub CLI](https://cli.github.com/) (`gh`) in `/usr/local/bin`. Debian packages only 2.23 (bookworm, the devkitPro base) and 2.46 (trixie), so the images download a pinned upstream release and verify its sha256. Because the download runs on the build platform, the relabel-only devkitPro images still build without emulation.
 
-A weekly workflow bumps the pin in every Dockerfile in one pull request. Pass the token as `GH_TOKEN`:
+A weekly workflow bumps the pin in every Dockerfile in one pull request. Pass the token as `GH_TOKEN`, and grant the job the permission the command needs:
 
 ```yaml
-- run: gh release upload "$TAG" build/rom.gba
-  env:
-    GH_TOKEN: ${{ github.token }}
+release:
+  runs-on: ubuntu-latest
+  container: ghcr.io/toymaninteractive/toygine2.gba.toolchain:latest
+  permissions:
+    contents: write # gh release upload
+  steps:
+    - run: gh release upload "$GITHUB_REF_NAME" build/rom.gba
+      env:
+        GH_TOKEN: ${{ github.token }}
 ```
 
 ### GBA (Nintendo Game Boy Advance)
