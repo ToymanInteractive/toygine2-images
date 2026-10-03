@@ -7,14 +7,14 @@ on:
     paths:
       - Dockerfile.docs
       - .github/workflows/build_docs.yaml
-      - .github/workflows/_docker_build.yaml
+      - .github/workflows/_docker_build_native.yaml
   pull_request:
     branches:
       - main
     paths:
       - Dockerfile.docs
       - .github/workflows/build_docs.yaml
-      - .github/workflows/_docker_build.yaml
+      - .github/workflows/_docker_build_native.yaml
   # Every GCC build on main moves the gcc-<version> tag this image extends.
   workflow_run:
     workflows:
@@ -35,12 +35,10 @@ jobs:
     permissions:
       contents: read
       packages: write
-    uses: ./.github/workflows/_docker_build.yaml
+    uses: ./.github/workflows/_docker_build_native.yaml
     with:
       image: docs
       compiler-version: doxygen --version | cut -d' ' -f1
       compiler-tag: doxygen
-      # Doxygen's prebuilt binary is x86-64 only.
-      platforms: linux/amd64
-      # Cold build: about 1 min (arm64 Mac, amd64 emulation).
-      timeout: 15
+      # Cold build: 2 min on a 10-core arm64 Mac; tighten after the first CI run.
+      timeout: 60

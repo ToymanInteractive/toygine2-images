@@ -23,11 +23,6 @@ on:
         description: Prefix of the compiler version tag, such as gcc for gcc-16.2.0.
         required: true
         type: string
-      platforms:
-        description: Build platforms; narrowed only when upstream ships a single platform.
-        required: false
-        type: string
-        default: linux/amd64,linux/arm64
 
 permissions:
   contents: read
@@ -75,9 +70,8 @@ jobs:
             exit 1
           fi
 
-      # No setup-qemu-action: these images run commands only in --platform=$BUILDPLATFORM stages
-      # or build linux/amd64 alone. A two-platform image with a RUN on the target platform moves
-      # to _docker_build_native.yaml.
+      # No setup-qemu-action: these images run commands only in --platform=$BUILDPLATFORM stages.
+      # One that gains a RUN on the target platform moves to _docker_build_native.yaml.
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4.4.1
 
@@ -108,7 +102,7 @@ jobs:
         with:
           context: .
           file: Dockerfile.${{ inputs.image }}
-          platforms: ${{ inputs.platforms }}
+          platforms: linux/amd64,linux/arm64
           # Provenance disabled: multi-platform attestations break some registries and runtimes
           # (docker/build-push-action#781).
           provenance: false
@@ -122,7 +116,7 @@ jobs:
         with:
           context: .
           file: Dockerfile.${{ inputs.image }}
-          platforms: ${{ inputs.platforms }}
+          platforms: linux/amd64,linux/arm64
           provenance: false
           # Untagged until the compiler check in the next step passes.
           outputs: type=image,name=ghcr.io/toymaninteractive/toygine2.${{ inputs.image }}.toolchain,push-by-digest=true,name-canonical=true,push=true

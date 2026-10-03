@@ -1,0 +1,121 @@
+name: Update Doxygen release
+
+on:
+  schedule:
+    # Weekly on Saturday 01:00 UTC
+    - cron: "0 1 * * 6"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  update:
+    concurrency:
+      group: update-doxygen-release
+      cancel-in-progress: false
+    name: Bump Doxygen release
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Resolve latest Doxygen release
+        id: doxygen
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # releases/latest skips drafts and pre-releases. The pin is the tarball's GitHub digest.
+        run: |
+          release=$(curl -fsSL --retry 3 \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            https://api.github.com/repos/doxygen/doxygen/releases/latest)
+          tag=$(jq -r .tag_name <<< "${release}")
+          # Release_1_18_0 -> 1.18.0
+          latest=$(tr _ . <<< "${tag#Release_}")
+          # The version goes into sed and a download URL, so allow only version characters.
+          if ! [[ "${latest}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Unexpected Doxygen release tag: '${tag}'" >&2
+            exit 1
+          fi
+          src=$(jq -r --arg name "doxygen-${latest}.src.tar.gz" \
+            '.assets[] | select(.name == $name) | .digest' <<< "${release}")
+          if ! [[ "${src}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "::error::Missing sha256 digest for doxygen-${latest}.src.tar.gz: '${src}'" >&2
+            exit 1
+          fi
+          {
+            echo "version=${latest}"
+            echo "tag=${tag}"
+            echo "sha256=${src#sha256:}"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Update Dockerfile.docs
+        id: update
+        env:
+          LATEST: ${{ steps.doxygen.outputs.version }}
+          LATEST_SHA256: ${{ steps.doxygen.outputs.sha256 }}
+        run: |
+          read_pins() {
+            grep -oP '^ARG DOXYGEN_VERSION=\K\S+' Dockerfile.docs \
+              && grep -oP '^ARG DOXYGEN_SHA256=\K[0-9a-f]*' Dockerfile.docs
+          }
+          current=$(read_pins | paste -sd' ') || {
+            echo "::error::Failed to extract the Doxygen pins from Dockerfile.docs" >&2
+            exit 1
+          }
+          wanted="${LATEST} ${LATEST_SHA256}"
+          echo "current=${current}"
+          echo "latest=${wanted}"
+          # Never move the pin back if releases/latest lags behind a hand-set pin.
+          pinned=${current%% *}
+          newest=$(printf '%s\n' "${pinned}" "${LATEST}" | sort -V | tail -1)
+          if [ "${LATEST}" = "${pinned}" ] || [ "${newest}" != "${LATEST}" ]; then
+            echo "changed=false" >> "${GITHUB_OUTPUT}"
+            echo "Already up to date (pinned ${pinned}, latest release ${LATEST})."
+            exit 0
+          fi
+          sed -i \
+            -e "s/^ARG DOXYGEN_VERSION=.*/ARG DOXYGEN_VERSION=${LATEST}/" \
+            -e "s/^ARG DOXYGEN_SHA256=.*/ARG DOXYGEN_SHA256=${LATEST_SHA256}/" \
+            Dockerfile.docs
+          if [ "$(read_pins | paste -sd' ')" != "${wanted}" ]; then
+            echo "::error::Failed to update the Doxygen pins in Dockerfile.docs" >&2
+            exit 1
+          fi
+          {
+            echo "changed=true"
+            echo "current=${pinned}"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Create Pull Request
+        if: steps.update.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@v8.1.1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          sign-commits: true
+          branch: chore/bump-doxygen-release
+          delete-branch: true
+          commit-message: "chore(deps): bump Doxygen to ${{ steps.doxygen.outputs.version }}"
+          title: "chore(deps): bump Doxygen to ${{ steps.doxygen.outputs.version }}"
+          assignees: dkrutskikh
+          body: |
+            Automated weekly bump of the pinned Doxygen release in `Dockerfile.docs`.
+
+            - From: `${{ steps.update.outputs.current }}`
+            - To: `${{ steps.doxygen.outputs.version }}` (latest release)
+            - `doxygen-${{ steps.doxygen.outputs.version }}.src.tar.gz` sha256: `${{ steps.doxygen.outputs.sha256 }}`
+            - Release: https://github.com/doxygen/doxygen/releases/tag/${{ steps.doxygen.outputs.tag }}
+
+            A new release can add warnings that fail toygine2's `WARN_AS_ERROR` docs check. The minimum version is pinned in toygine2's `docs/CMakeLists.txt`.

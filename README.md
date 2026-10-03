@@ -11,7 +11,7 @@ Docker images for toygine2 CI/CD pipelines, automatically rebuilt when upstream 
 | toygine2.n64.toolchain   | [Libdragon](https://github.com/DragonMinded/libdragon) toolchain for building ToyGine2 targeting the Nintendo 64 (`mips64-elf`)         |
 | toygine2.gcc.toolchain   | [GCC](https://gcc.gnu.org/) built from the latest release for building and testing ToyGine2 on Linux                                    |
 | toygine2.clang.toolchain | [Clang](https://clang.llvm.org/) with libc++ from the latest LLVM release for building and testing ToyGine2 on Linux                    |
-| toygine2.docs.toolchain  | [Doxygen](https://www.doxygen.nl/) and Graphviz on the GCC image for checking ToyGine2's documentation (`linux/amd64` only)             |
+| toygine2.docs.toolchain  | [Doxygen](https://www.doxygen.nl/) (built from source) and Graphviz on the GCC image for checking ToyGine2's documentation              |
 
 Every build on `main` publishes `latest`, the UTC build date (`20261002`) and the compiler version: `clang-<version>` in the Clang image, `doxygen-<version>` in the docs image, `gcc-<version>` elsewhere (`gcc-16.2.0` for GCC, `gcc-16.1.0` for devkitARM). The compiler tag follows later builds with the same compiler, so a workflow pinned to it keeps its compiler and still gets updates to the rest of the image.
 
@@ -147,11 +147,11 @@ docker run --rm --user "$(id -u):$(id -g)" -v "$PWD":/workspace -w /workspace \
 
 ### Docs (Doxygen)
 
-`Dockerfile.docs` adds [Doxygen](https://www.doxygen.nl/) and [Graphviz](https://graphviz.org/) to the GCC image for toygine2's documentation check. toygine2's `docs` target requires Doxygen 1.18.0, but Debian trixie packages 1.9.8. The image therefore takes `bin/doxygen` from the upstream release archive and checks it against a pinned sha256. Graphviz comes from Debian; `dot` draws the class, include and call graphs.
+`Dockerfile.docs` adds [Doxygen](https://www.doxygen.nl/) and [Graphviz](https://graphviz.org/) to the GCC image for toygine2's documentation check. toygine2's `docs` target requires Doxygen 1.18.0, but Debian trixie packages 1.9.8 and the upstream prebuilt binary is x86-64 only. The image therefore builds Doxygen for both platforms from the release's source tarball, using the GCC image's compiler. Graphviz comes from Debian; `dot` draws the class, include and call graphs.
 
-Doxygen publishes its prebuilt binary for x86-64 only, so this image is built for `linux/amd64` alone. On an arm64 host, run it with `--platform linux/amd64`.
+Doxygen is built without libclang, so `CLANG_ASSISTED_PARSING` is unavailable. A Doxyfile that still sets the `CLANG_*` tags gets one warning per tag on stderr, and the run still succeeds.
 
-The image is built on the GCC image's `gcc-16.2.0` tag, so it also has CMake, Ninja, GCC and the rest of that image. Every GCC image build on `main` triggers a rebuild. The Doxygen version and checksum are bumped by hand.
+The image is built on the GCC image's `gcc-16.2.0` tag, so it also has CMake, Ninja, GCC and the rest of that image. Every GCC image build on `main` triggers a rebuild. The Doxygen version and the source tarball's sha256 are pinned in the Dockerfile. A weekly workflow takes them from the latest Doxygen release and opens a pull request with the new pin.
 
 Run (generate the documentation of a CMake project mounted from the host):
 
