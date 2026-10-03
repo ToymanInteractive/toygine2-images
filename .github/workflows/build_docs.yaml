@@ -1,0 +1,46 @@
+name: Build docs toolchain
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - Dockerfile.docs
+      - .github/workflows/build_docs.yaml
+      - .github/workflows/_docker_build.yaml
+  pull_request:
+    branches:
+      - main
+    paths:
+      - Dockerfile.docs
+      - .github/workflows/build_docs.yaml
+      - .github/workflows/_docker_build.yaml
+  # Every GCC build on main moves the gcc-<version> tag this image extends.
+  workflow_run:
+    workflows:
+      - Build GCC toolchain
+    types:
+      - completed
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    # Only a successful GCC build publishes a new base.
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/_docker_build.yaml
+    with:
+      image: docs
+      compiler-version: doxygen --version | cut -d' ' -f1
+      compiler-tag: doxygen
+      # Doxygen's prebuilt binary is x86-64 only.
+      platforms: linux/amd64
+      # Cold build: about 1 min (arm64 Mac, amd64 emulation).
+      timeout: 15
