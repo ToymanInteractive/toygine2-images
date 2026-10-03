@@ -72,7 +72,8 @@ jobs:
           LATEST: ${{ steps.gh.outputs.version }}
           LATEST_AMD64: ${{ steps.gh.outputs.sha256_amd64 }}
           LATEST_ARM64: ${{ steps.gh.outputs.sha256_arm64 }}
-        # Every image ships gh, so a Dockerfile without the pins fails the job.
+        # Every image ships gh. Images built on a toygine2 image inherit it; any other Dockerfile
+        # without the pins fails the job.
         run: |
           read_pins() {
             grep -oP '^ARG GH_VERSION=\K\S+' "$1" \
@@ -84,6 +85,10 @@ jobs:
           versions=()
           stale=()
           for f in Dockerfile.*; do
+            if grep -q '^FROM ghcr.io/toymaninteractive/' "${f}"; then
+              echo "${f}: gh from its toygine2 base image"
+              continue
+            fi
             pins=$(read_pins "${f}" | paste -sd' ') || {
               echo "::error file=${f}::Failed to extract the GitHub CLI pins from ${f}" >&2
               exit 1

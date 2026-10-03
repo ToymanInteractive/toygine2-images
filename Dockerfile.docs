@@ -1,0 +1,73 @@
+# Doxygen and Graphviz on the GCC image (CMake, Ninja, the compiler) for toygine2's docs check.
+#
+# Doxygen is built from source: the docs target needs 1.18.0, trixie has 1.9.8 and the upstream
+# binary is x86-64 only.
+#
+# Usage (same as the other toygine2 images):
+#   docker build -t toygine2-docs - < Dockerfile.docs
+#   docker run --rm --user "$(id -u):$(id -g)" -v "$PWD":/workspace -w /workspace toygine2-docs \
+#       cmake --build --preset linux-debug --target docs
+
+# Global for the label; the update workflow bumps both from the tarball's GitHub digest.
+ARG DOXYGEN_VERSION=1.18.0
+ARG DOXYGEN_SHA256=a1deed70a6785bbec95a2b2a9e419dc7f7b223a9d74a8644ae611c8e2dcdd354
+
+# --- Stage 1: Doxygen builder ---
+# The base's GCC 16 builds it, so it uses the same libstdc++ as the final image.
+FROM ghcr.io/toymaninteractive/toygine2.gcc.toolchain:gcc-16.2.0 AS doxygen-builder
+
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
+# flex/bison: Doxygen's scanners and parsers.
+RUN apt-get update -qq && apt-get install -y --no-install-recommends bison flex \
+    && rm -rf /var/lib/apt/lists/*
+
+ARG DOXYGEN_VERSION
+ARG DOXYGEN_SHA256
+
+# No libclang: toygine2 keeps CLANG_ASSISTED_PARSING off. Release tags use underscores.
+RUN tag="Release_$(echo "${DOXYGEN_VERSION}" | tr . _)" \
+    && mkdir -p /tmp/doxygen && cd /tmp/doxygen \
+    && curl -fSL --retry 3 -o doxygen.tgz \
+    "https://github.com/doxygen/doxygen/releases/download/${tag}/doxygen-${DOXYGEN_VERSION}.src.tar.gz" \
+    && { [ -z "${DOXYGEN_SHA256}" ] || echo "${DOXYGEN_SHA256}  doxygen.tgz" | sha256sum -c -; } \
+    && tar -xzf doxygen.tgz \
+    && cmake -S "doxygen-${DOXYGEN_VERSION}" -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+    && cmake --build build --parallel "$(nproc)" \
+    && cmake --install build --prefix /opt/doxygen --strip \
+    && cd / && rm -rf /tmp/doxygen \
+    && /opt/doxygen/bin/doxygen --version
+
+# --- Stage 2: final image ---
+FROM ghcr.io/toymaninteractive/toygine2.gcc.toolchain:gcc-16.2.0
+
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
+# graphviz: dot for the Doxyfile's HAVE_DOT graphs.
+RUN apt-get update -qq && apt-get install -y --no-install-recommends graphviz \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=doxygen-builder /opt/doxygen/bin/doxygen /usr/local/bin/doxygen
+
+# Smoke test: render a call graph under WARN_AS_ERROR.
+RUN mkdir -p /tmp/smoke && cd /tmp/smoke \
+    && printf '%s\n' '/// @file' '/// @brief Smoke test.' '' \
+    '/// @brief Returns the answer.' 'int answer() { return 42; }' '' \
+    '/// @brief Calls answer().' 'int caller() { return answer(); }' > smoke.cpp \
+    && printf '%s\n' 'INPUT = smoke.cpp' 'QUIET = YES' 'WARN_AS_ERROR = FAIL_ON_WARNINGS' \
+    'HAVE_DOT = YES' 'CALL_GRAPH = YES' 'DOT_IMAGE_FORMAT = svg' 'GENERATE_LATEX = NO' \
+    | doxygen - \
+    && compgen -G 'html/*_cgraph.svg' \
+    && doxygen --version && dot -V \
+    && cd / && rm -rf /tmp/smoke
+
+LABEL org.opencontainers.image.title="ToyGine2 Docs Toolchain"
+LABEL org.opencontainers.image.description="Doxygen and Graphviz on the GCC toolchain for checking ToyGine2's documentation."
+LABEL org.opencontainers.image.base.name="ghcr.io/toymaninteractive/toygine2.gcc.toolchain:gcc-16.2.0"
+
+# The gcc, lcov and gh version labels come from the base.
+LABEL com.toygine2.toolchain="Doxygen"
+
+# Re-declare to bring the globally pinned value into this stage for the label below.
+ARG DOXYGEN_VERSION
+LABEL com.toygine2.sdk.doxygen.version="${DOXYGEN_VERSION}"

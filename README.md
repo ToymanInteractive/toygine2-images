@@ -11,8 +11,9 @@ Docker images for toygine2 CI/CD pipelines, automatically rebuilt when upstream 
 | toygine2.n64.toolchain   | [Libdragon](https://github.com/DragonMinded/libdragon) toolchain for building ToyGine2 targeting the Nintendo 64 (`mips64-elf`)         |
 | toygine2.gcc.toolchain   | [GCC](https://gcc.gnu.org/) built from the latest release for building and testing ToyGine2 on Linux                                    |
 | toygine2.clang.toolchain | [Clang](https://clang.llvm.org/) with libc++ from the latest LLVM release for building and testing ToyGine2 on Linux                    |
+| toygine2.docs.toolchain  | [Doxygen](https://www.doxygen.nl/) (built from source) and Graphviz on the GCC image for checking ToyGine2's documentation              |
 
-Every build on `main` publishes `latest`, the UTC build date (`20261002`) and the compiler version: `clang-<version>` in the Clang image, `gcc-<version>` elsewhere (`gcc-16.2.0` for GCC, `gcc-16.1.0` for devkitARM). The compiler tag follows later builds with the same compiler, so a workflow pinned to it keeps its compiler and still gets updates to the rest of the image.
+Every build on `main` publishes `latest`, the UTC build date (`20261002`) and the compiler version: `clang-<version>` in the Clang image, `doxygen-<version>` in the docs image, `gcc-<version>` elsewhere (`gcc-16.2.0` for GCC, `gcc-16.1.0` for devkitARM). The compiler tag follows later builds with the same compiler, so a workflow pinned to it keeps its compiler and still gets updates to the rest of the image.
 
 To pin the whole image, use its digest (`@sha256:...`). Nightly cleanup keeps `latest`, every compiler tag and the 10 newest dated builds, so a dated tag lasts about 10 rebuilds.
 
@@ -110,7 +111,7 @@ The image ships no emulator yet, so ROMs are built in CI but not run.
 
 `Dockerfile.gcc` builds the latest [GCC](https://gcc.gnu.org/) release (C and C++ only) from source for building and testing ToyGine2 on Linux. Debian's own GCC is older, and Ubuntu 26.04 ships only a pre-release GCC 16 snapshot.
 
-The compiler is installed into `/usr/local`, so `gcc`, `g++`, `c++` and a `cc` symlink are on `PATH`, and CMake and make find them without `CC` or `CXX`. Its `libstdc++` is registered with the dynamic loader, so test binaries run against it rather than Debian's older copy. The image also contains binutils, CMake, Ninja, make, git, GnuPG (`gpg`, `gpg-agent`), Python 3 and lcov.
+The compiler is installed into `/usr/local`, so `gcc`, `g++`, `c++` and a `cc` symlink are on `PATH`, and CMake and make find them without `CC` or `CXX`. Its `libstdc++` is registered with the dynamic loader, so test binaries run against it rather than Debian's older copy. The image also contains binutils, CMake, Ninja, make, git, GnuPG (`gpg`, `gpg-agent`, `dirmngr`), Python 3 and lcov.
 
 The version and the tarball's sha256 are pinned in the Dockerfile. A weekly workflow checks for a new GCC release, verifies its GNU signature and opens a pull request with the new pin.
 
@@ -142,4 +143,20 @@ Run (configure, build and test a CMake project mounted from the host):
 docker run --rm --user "$(id -u):$(id -g)" -v "$PWD":/workspace -w /workspace \
     ghcr.io/toymaninteractive/toygine2.clang.toolchain:latest \
     sh -c 'cmake --preset linux-release && cmake --build --preset linux-release && ctest --preset linux-release'
+```
+
+### Docs (Doxygen)
+
+`Dockerfile.docs` adds [Doxygen](https://www.doxygen.nl/) and [Graphviz](https://graphviz.org/) to the GCC image for toygine2's documentation check. toygine2's `docs` target requires Doxygen 1.18.0, but Debian trixie packages 1.9.8 and the upstream prebuilt binary is x86-64 only. The image therefore builds Doxygen for both platforms from the release's source tarball, using the GCC image's compiler. Graphviz comes from Debian; `dot` draws the class, include and call graphs.
+
+Doxygen is built without libclang, so `CLANG_ASSISTED_PARSING` is unavailable. A Doxyfile that still sets the `CLANG_*` tags gets one warning per tag on stderr, and the run still succeeds.
+
+The image is built on the GCC image's `gcc-16.2.0` tag, so it also has CMake, Ninja, GCC and the rest of that image. Every GCC image build on `main` triggers a rebuild. The Doxygen version and the source tarball's sha256 are pinned in the Dockerfile. A weekly workflow takes them from the latest Doxygen release and opens a pull request with the new pin.
+
+Run (generate the documentation of a CMake project mounted from the host):
+
+```sh
+docker run --rm --user "$(id -u):$(id -g)" -v "$PWD":/workspace -w /workspace \
+    ghcr.io/toymaninteractive/toygine2.docs.toolchain:latest \
+    sh -c 'cmake --preset linux-debug -DTOYGINE_BUILD_DOCS=ON && cmake --build --preset linux-debug --target docs'
 ```

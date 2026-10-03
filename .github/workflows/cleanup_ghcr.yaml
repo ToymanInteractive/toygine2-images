@@ -32,6 +32,7 @@ jobs:
         include:
           - image: 3ds
           - image: clang
+          - image: docs
           - image: gba
           - image: gc
           - image: gcc
@@ -55,7 +56,7 @@ jobs:
           # Keep latest, the buildcache refs (shared and per-platform) and the compiler tags that
           # workflows pin. One matching tag keeps a version, and the rule below keeps its platform
           # manifests.
-          image-tags: "!latest !buildcache* !gcc-* !clang-*"
+          image-tags: "!latest !buildcache* !gcc-* !clang-* !doxygen-*"
           # Also clean orphaned untagged manifests; since v3.1.0 the children of kept multi-arch
           # tags are protected automatically.
           tag-selection: both
