@@ -17,7 +17,7 @@
 
 # Pinned mGBA commit. It is a global ARG so the builder stage and the final image's metadata
 # label read the same value; the update workflow bumps it like a dependency.
-ARG MGBA_COMMIT=1d201b22a86d31dfb3bc75145403711f6762015f
+ARG MGBA_COMMIT=c3c8e5e813f245028de118a56734e1dc0f35ce2a
 
 # Pinned emibios release and the sha256 of its gba_bios.bin; the update workflow bumps both.
 ARG EMIBIOS_VERSION=0.1.5
