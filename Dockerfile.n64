@@ -63,7 +63,7 @@ ENV PATH="${N64_INST}/bin:${PATH}"
 RUN mkdir -p /tmp/libdragon-toolchain \
     && cd /tmp/libdragon-toolchain \
     && git init -q \
-    && git remote add origin https://github.com/DragonMinded/libdragon.git \
+    && git remote add origin https://github.com/n64brew/libdragon.git \
     && git fetch --depth 1 origin "${LIBDRAGON_TOOLCHAIN_COMMIT}" \
     && git checkout -q --detach FETCH_HEAD \
     && mkdir -p "${BUILD_PATH}" "${DOWNLOAD_PATH}" \
@@ -89,7 +89,7 @@ ARG SKIP_SMOKE_TEST=0
 RUN mkdir -p /tmp/libdragon \
     && cd /tmp/libdragon \
     && git init -q \
-    && git remote add origin https://github.com/DragonMinded/libdragon.git \
+    && git remote add origin https://github.com/n64brew/libdragon.git \
     && git fetch --depth 1 origin "${LIBDRAGON_COMMIT}" \
     && git checkout -q --detach FETCH_HEAD \
     && ./build.sh --no-examples \

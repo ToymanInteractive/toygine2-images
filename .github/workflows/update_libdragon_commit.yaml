@@ -39,7 +39,7 @@ jobs:
             -H "Authorization: Bearer ${GH_TOKEN}" \
             -H "Accept: application/vnd.github+json" \
             -H "X-GitHub-Api-Version: 2022-11-28" \
-            https://api.github.com/repos/DragonMinded/libdragon/commits/preview \
+            https://api.github.com/repos/n64brew/libdragon/commits/preview \
             | jq -r .sha)
           if [ -z "${latest}" ] || [ "${latest}" = "null" ]; then
             echo "::error::Failed to resolve latest Libdragon preview commit" >&2
@@ -61,7 +61,7 @@ jobs:
               -H "Authorization: Bearer ${GH_TOKEN}" \
               -H "Accept: application/vnd.github+json" \
               -H "X-GitHub-Api-Version: 2022-11-28" \
-              "https://api.github.com/repos/DragonMinded/libdragon/contents/tools/build-toolchain.sh?ref=$1" \
+              "https://api.github.com/repos/n64brew/libdragon/contents/tools/build-toolchain.sh?ref=$1" \
               | jq -r .sha
           }
 
@@ -133,8 +133,8 @@ jobs:
           body: |
             Automated weekly bump of the pinned Libdragon commits in `Dockerfile.n64`.
 
-            - Repo: https://github.com/DragonMinded/libdragon
+            - Repo: https://github.com/n64brew/libdragon
             - From: `${{ steps.update.outputs.current }}`
             - To: `${{ steps.libdragon.outputs.sha }}` (preview HEAD)
             - Toolchain pin: ${{ steps.update.outputs.toolchain_note }}
-            - Compare: https://github.com/DragonMinded/libdragon/compare/${{ steps.update.outputs.current }}...${{ steps.libdragon.outputs.sha }}
+            - Compare: https://github.com/n64brew/libdragon/compare/${{ steps.update.outputs.current }}...${{ steps.libdragon.outputs.sha }}
