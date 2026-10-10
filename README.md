@@ -8,7 +8,7 @@ Docker images for toygine2 CI/CD pipelines, automatically rebuilt when upstream 
 | ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------- |
 | toygine2.gba.toolchain   | [devkitARM](https://devkitpro.org/wiki/Getting_Started) toolchain for building ToyGine2 targeting the Nintendo Game Boy Advance         |
 | toygine2.md.toolchain    | [ClownMDSDK](https://github.com/Clownacy/clownmdsdk) toolchain for building ToyGine2 targeting the Sega Mega Drive/Genesis (`m68k-elf`) |
-| toygine2.n64.toolchain   | [Libdragon](https://github.com/DragonMinded/libdragon) toolchain for building ToyGine2 targeting the Nintendo 64 (`mips64-elf`)         |
+| toygine2.n64.toolchain   | [Libdragon](https://github.com/n64brew/libdragon) toolchain for building ToyGine2 targeting the Nintendo 64 (`mips64-elf`)              |
 | toygine2.gcc.toolchain   | [GCC](https://gcc.gnu.org/) built from the latest release for building and testing ToyGine2 on Linux                                    |
 | toygine2.clang.toolchain | [Clang](https://clang.llvm.org/) with libc++ from the latest LLVM release for building and testing ToyGine2 on Linux                    |
 | toygine2.docs.toolchain  | [Doxygen](https://www.doxygen.nl/) (built from source) and Graphviz on the GCC image for checking ToyGine2's documentation              |
@@ -91,7 +91,7 @@ docker run --rm -v "$PWD":/workspace -w /workspace \
 
 ### Nintendo 64
 
-`Dockerfile.n64` builds the [Libdragon](https://github.com/DragonMinded/libdragon) toolchain for building ToyGine2 targeting the Nintendo 64 (`mips64-elf`). The image contains binutils, GCC, newlib, the libdragon library built from the `preview` branch, and its host tools (`n64tool`, `mksprite`, `audioconv64` and others).
+`Dockerfile.n64` builds the [Libdragon](https://github.com/n64brew/libdragon) toolchain for building ToyGine2 targeting the Nintendo 64 (`mips64-elf`). The image contains binutils, GCC, newlib, the libdragon library built from the `preview` branch, and its host tools (`n64tool`, `mksprite`, `audioconv64` and others).
 
 Everything is installed into `/opt/libdragon`. The image sets `N64_INST` to this path, and libdragon's `n64.mk` uses that variable to find the toolchain.
 
