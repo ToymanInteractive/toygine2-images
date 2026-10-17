@@ -21,7 +21,7 @@
 # on every library bump. LIBDRAGON_TOOLCHAIN_COMMIT moves only when the script changes, which keeps
 # stage 1 cached.
 ARG LIBDRAGON_TOOLCHAIN_COMMIT=39d0d6096130836a65710da6730290701d060272
-ARG LIBDRAGON_COMMIT=39d0d6096130836a65710da6730290701d060272
+ARG LIBDRAGON_COMMIT=f26e1c16145e4d6ad7e391e1306513d684083c02
 
 # GitHub CLI release and archive sha256s, the same in every Dockerfile; update_gh_release.yaml
 # bumps them all at once.
