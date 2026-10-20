@@ -18,7 +18,7 @@ ARG GH_SHA256_ARM64=7862c86c72f43df3a2d93ddde6f473285b4e2af61b494849846827e513ef
 
 # --- Stage 1: GitHub CLI fetch ---
 # gh is a static Go binary, so this stage runs on the build platform and arm64 needs no emulation.
-FROM --platform=$BUILDPLATFORM devkitpro/devkitppc:20260503 AS gh-fetch
+FROM --platform=$BUILDPLATFORM devkitpro/devkitppc:20261016 AS gh-fetch
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
@@ -45,7 +45,7 @@ RUN case "${TARGETARCH}" in \
     && if [ "${TARGETARCH}" = "${BUILDARCH}" ]; then ./gh --version; fi
 
 # --- Stage 2: final image ---
-FROM devkitpro/devkitppc:20260503
+FROM devkitpro/devkitppc:20261016
 
 # A mounted checkout is owned by the host user, so git as root fails with "dubious ownership".
 # System-wide so --user uids (HOME=/) see it too. COPY: a RUN would need arm64 emulation.
