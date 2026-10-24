@@ -20,8 +20,8 @@
 ARG MGBA_COMMIT=143adf5aa2a60c6036810b0cd72445e13d74b0e6
 
 # Pinned emibios release and the sha256 of its gba_bios.bin; the update workflow bumps both.
-ARG EMIBIOS_VERSION=0.1.6
-ARG EMIBIOS_SHA256=ca56efafc53af12f6ba2eec722302dd2cb725f65dd2ed8afdeb5d27bc14e2d08
+ARG EMIBIOS_VERSION=0.2.0
+ARG EMIBIOS_SHA256=95e6c8a6c236ed8e2629bdb60bc75791434c4f08ca69ad2305e30ca3f3c29d1b
 
 # GitHub CLI release and archive sha256s, the same in every Dockerfile; update_gh_release.yaml
 # bumps them all at once.
