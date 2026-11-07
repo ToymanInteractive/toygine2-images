@@ -17,10 +17,10 @@
 
 # Global so the final image can label it. The update workflow bumps all four from GitHub's upload
 # digests: the source tarball and one archive per platform.
-ARG LLVM_VERSION=23.1.4
-ARG LLVM_SRC_SHA256=819ecf7351f1a66f76b2d701d8942faaf5faeb324cb90c9d5b090de142434bb2
-ARG LLVM_SHA256_AMD64=efdd1dbd089b99bfcfcde7b8eb1236163f2e88df5a981cca4f783ec9cb5e0378
-ARG LLVM_SHA256_ARM64=0975f753e0f9b5f83146a7a2f4678bc143e713496b56520716a4de047a63f99f
+ARG LLVM_VERSION=23.1.5
+ARG LLVM_SRC_SHA256=fb50b1eac93ddeb3aa8dab4cfe324dff74f4a9c2bdee6160c9e36188f8d06a6e
+ARG LLVM_SHA256_AMD64=c3107384835f788768f614db610e87fba7077f125ca950eb02a78bab0a308065
+ARG LLVM_SHA256_ARM64=830ceb70edf63849ce66e97bf85310a3bf2bdd04c860a9f2fa4ef1560e290cef
 
 # Bumped by hand from the release asset's digest; lcov has no update workflow.
 ARG LCOV_VERSION=2.5
