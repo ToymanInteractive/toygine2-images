@@ -41,9 +41,10 @@ set(CMAKE_C_FLAGS_INIT "${N64_COMMON_FLAGS}")
 set(CMAKE_CXX_FLAGS_INIT "${N64_COMMON_FLAGS}")
 set(CMAKE_ASM_FLAGS_INIT "${N64_ARCH_SETTINGS} -I${N64_SDK_INCLUDE}")
 
-# n64.mk links every ELF through g++ (ld inconsistencies with global ctors/dtors)
+# n64.mk links every ELF through g++ (ld inconsistencies with global ctors/dtors). The C rule
+# inlines the compiler path: <CMAKE_CXX_COMPILER> stays unexpanded in C-only projects.
 set(CMAKE_C_LINK_EXECUTABLE
-	"<CMAKE_CXX_COMPILER> <FLAGS> <CMAKE_C_LINK_FLAGS> <LINK_FLAGS> <OBJECTS> -o <TARGET> <LINK_LIBRARIES>")
+	"\"${CMAKE_CXX_COMPILER}\" <FLAGS> <CMAKE_C_LINK_FLAGS> <LINK_FLAGS> <OBJECTS> -o <TARGET> <LINK_LIBRARIES>")
 set(CMAKE_CXX_LINK_EXECUTABLE
 	"<CMAKE_CXX_COMPILER> <FLAGS> <CMAKE_CXX_LINK_FLAGS> <LINK_FLAGS> <OBJECTS> -o <TARGET> <LINK_LIBRARIES>")
 
@@ -77,19 +78,28 @@ function(n64_create_rom target)
 		list(APPEND N64_TOOL_ARGS -R "${N64_REGION}")
 	endif()
 
-	set(sym "$<TARGET_FILE_DIR:${target}>/$<TARGET_FILE_BASE_NAME:${target}>.sym")
-	set(stripped "$<TARGET_FILE_DIR:${target}>/$<TARGET_FILE_BASE_NAME:${target}>.stripped")
+	set(sym "${CMAKE_CURRENT_BINARY_DIR}/${target}.sym")
+	set(stripped "${CMAKE_CURRENT_BINARY_DIR}/${target}.stripped")
 
-	add_custom_command(TARGET ${target} POST_BUILD
+	add_custom_command(OUTPUT "${sym}"
 		COMMAND "${N64_SDK_BIN}/n64sym" --all "$<TARGET_FILE:${target}>" "${sym}"
+		DEPENDS ${target}
+		VERBATIM
+	)
+	add_custom_command(OUTPUT "${stripped}"
 		COMMAND "${CMAKE_COMMAND}" -E copy "$<TARGET_FILE:${target}>" "${stripped}"
 		COMMAND "${N64_SDK_BIN}/mips64-elf-strip" -s "${stripped}"
-		COMMAND "${N64_SDK_BIN}/n64elfcompress" -o "$<TARGET_FILE_DIR:${target}>" -c "${N64_ELFCOMPRESS}" "${stripped}"
+		COMMAND "${N64_SDK_BIN}/n64elfcompress" -o "${CMAKE_CURRENT_BINARY_DIR}" -c "${N64_ELFCOMPRESS}" "${stripped}"
+		DEPENDS ${target}
+		VERBATIM
+	)
+	add_custom_command(OUTPUT "${N64_OUTPUT}"
 		COMMAND "${N64_SDK_BIN}/n64tool" ${N64_TOOL_ARGS} --output "${N64_OUTPUT}.tmp" --align 256
 			"${stripped}" "${sym}" ${N64_DFS} ${N64_MSYM}
 		COMMAND "${CMAKE_COMMAND}" -E rename "${N64_OUTPUT}.tmp" "${N64_OUTPUT}"
-		BYPRODUCTS "${N64_OUTPUT}"
-		COMMENT "Building N64 ROM for ${target}"
+		DEPENDS "${stripped}" "${sym}" ${N64_DFS} ${N64_MSYM}
+		COMMENT "Building N64 ROM target ${target}_rom"
 		VERBATIM
 	)
+	add_custom_target(${target}_rom ALL DEPENDS "${N64_OUTPUT}")
 endfunction()
