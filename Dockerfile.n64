@@ -7,11 +7,15 @@
 #
 # Both stages install into /opt/libdragon (n64.mk finds it through N64_INST), and the final image
 # copies only that directory and the GitHub CLI (gh) from a third stage.
+# A CMake toolchain file mirroring n64.mk's flags ships at /opt/libdragon/cmake/N64.cmake.
 #
-# Usage (same as the other toygine2 images):
-#   docker build -t toygine2-n64 - < Dockerfile.n64
+# Usage (build needs the repo as context: it copies cmake/N64.cmake):
+#   docker build -t toygine2-n64 -f Dockerfile.n64 .
 #   docker run --rm -v "$PWD":/workspace -w /workspace toygine2-n64 \
 #       make -C path/to/project
+#   docker run --rm -v "$PWD":/workspace -w /workspace toygine2-n64 \
+#       cmake -G Ninja -DCMAKE_TOOLCHAIN_FILE=/opt/libdragon/cmake/N64.cmake \
+#           -S path/to/project -B out
 
 # Pinned upstream commits (global ARGs so the final image can expose them as metadata labels;
 # both are bumped like dependencies by the update workflow).
@@ -75,6 +79,15 @@ RUN mkdir -p /tmp/libdragon-toolchain \
 # build-essential it already has.
 FROM toolchain-builder AS library-builder
 
+# Re-declared for hadolint DL4006: the smoke test below pipes readelf into grep.
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
+# cmake and ninja-build only for the CMake smoke test; own layer so a change here does not
+# invalidate the cached GCC build in toolchain-builder.
+RUN apt-get update -qq && apt-get install -y --no-install-recommends \
+    cmake ninja-build \
+    && rm -rf /var/lib/apt/lists/*
+
 # Inherit the globally pinned library commit declared above.
 ARG LIBDRAGON_COMMIT
 
@@ -98,6 +111,57 @@ RUN mkdir -p /tmp/libdragon \
     && mips64-elf-g++ --version; \
     fi \
     && rm -rf /tmp/libdragon
+
+# Authored toolchain file from the repo (see cmake/N64.cmake).
+COPY cmake/N64.cmake /opt/libdragon/cmake/N64.cmake
+
+COPY <<'EOF' /tmp/cmake-smoke/CMakeLists.txt
+cmake_minimum_required(VERSION 3.27)
+project(n64_cmake_smoke C CXX)
+
+find_library(LIBDRAGON_LIBRARY dragon REQUIRED)
+find_path(LIBDRAGON_INCLUDE_DIR libdragon.h REQUIRED)
+
+add_executable(cmake_smoke_c main.c)
+add_executable(cmake_smoke_cpp main.cpp)
+
+n64_create_rom(cmake_smoke_cpp TITLE "cmake smoke")
+EOF
+
+COPY <<'EOF' /tmp/cmake-smoke/main.c
+#include <libdragon.h>
+
+int main() {
+    debug_init(DEBUG_FEATURE_ALL);
+    debugf("cmake smoke: C\n");
+    return 0;
+}
+EOF
+
+COPY <<'EOF' /tmp/cmake-smoke/main.cpp
+#include <libdragon.h>
+#include <GL/gl.h>
+
+int main() {
+    debug_init(DEBUG_FEATURE_ALL);
+    debugf("cmake smoke: C++\n");
+    return 0;
+}
+EOF
+
+# CMake smoke: configure+link a real program against libdragon in both languages and build a
+# ROM, with the same SKIP_SMOKE_TEST escape hatch as the n64.mk smoke test above.
+RUN if [ "${SKIP_SMOKE_TEST}" != "1" ]; then \
+    cmake -G Ninja -S /tmp/cmake-smoke -B /tmp/cmake-smoke/build \
+    -DCMAKE_TOOLCHAIN_FILE=/opt/libdragon/cmake/N64.cmake \
+    && ninja -C /tmp/cmake-smoke/build \
+    && test -f /tmp/cmake-smoke/build/cmake_smoke_c \
+    && test -f /tmp/cmake-smoke/build/cmake_smoke_cpp \
+    && test -f /tmp/cmake-smoke/build/cmake_smoke_cpp.z64 \
+    && test "$(od -An -tx1 -N4 /tmp/cmake-smoke/build/cmake_smoke_cpp.z64 | tr -d ' \n')" = "80371240" \
+    && mips64-elf-readelf -h /tmp/cmake-smoke/build/cmake_smoke_cpp | grep -q "Machine:.*MIPS" \
+    && rm -rf /tmp/cmake-smoke; \
+    fi
 
 # --- Stage 3: GitHub CLI fetch ---
 # gh is a static Go binary, so this stage runs on the build platform and arm64 needs no emulation.
@@ -135,8 +199,9 @@ RUN case "${TARGETARCH}" in \
 # --- Stage 4: final image ---
 FROM debian:trixie-slim
 
-# make: Makefile projects (n64.mk); cmake: toolchain.cmake; ninja-build: the consumer CMake presets
-# use the Ninja generator; git and ca-certificates: actions/checkout runs git from the image itself,
+# make: Makefile projects (n64.mk); cmake and ninja-build: CMake consumers configure through
+# the toolchain file shipped at /opt/libdragon/cmake/N64.cmake with the Ninja generator; git and
+# ca-certificates: actions/checkout runs git from the image itself,
 # and without it checkout silently falls back to the REST API tarball, where 'submodules: recursive'
 # becomes a hard error; curl/xz-utils/unzip: CI steps fetch and unpack tools inside the job
 # container; python3: every toygine2 image has it for CI helper scripts such as
