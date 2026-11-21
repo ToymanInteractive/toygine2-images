@@ -22,7 +22,7 @@
 # CLOWNMDSDK_COMMIT and BLASTEM_COMMIT are bumped like dependencies by the update workflows.
 ARG CLOWNMDSDK_COMMIT=460e3c02535561b6a742c71010b686935c200028
 ARG GCC_VERSION=16.2.0
-ARG BLASTEM_COMMIT=6d1a7447ee9e8b70e59c553daac5c9435781ca04
+ARG BLASTEM_COMMIT=ce5e85c3b219bfa58583391d9c95dc5256fd6c99
 
 # GitHub CLI release and archive sha256s, the same in every Dockerfile; update_gh_release.yaml
 # bumps them all at once.
