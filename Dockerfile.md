@@ -26,9 +26,9 @@ ARG BLASTEM_COMMIT=ce5e85c3b219bfa58583391d9c95dc5256fd6c99
 
 # GitHub CLI release and archive sha256s, the same in every Dockerfile; update_gh_release.yaml
 # bumps them all at once.
-ARG GH_VERSION=2.105.0
-ARG GH_SHA256_AMD64=79e7ab5db738c48777b696e374f8b428f0647debfb424f44d2f426370407fe2f
-ARG GH_SHA256_ARM64=b1278c75107423d818f1937fd92cafc9e5e9b606631568f68d7fb816f5885a02
+ARG GH_VERSION=2.106.0
+ARG GH_SHA256_AMD64=a476449fa9625413c54a3734eded62e9e480e49f421ff08e7f3b3879c059a033
+ARG GH_SHA256_ARM64=5e8a0c51e1a8345f36bd0b8bb88604b6a5388df16f3ab3e3b9b6d794fa223a67
 
 # --- Stage 1: ClownMDSDK toolchain builder ---
 FROM debian:trixie-slim AS toolchain-builder
