@@ -20,7 +20,7 @@
 
 # Pinned toolchain versions. Global ARGs so the final image can expose them as labels;
 # CLOWNMDSDK_COMMIT and BLASTEM_COMMIT are bumped like dependencies by the update workflows.
-ARG CLOWNMDSDK_COMMIT=bfb4694f8d948f1e54a07f0c66a0ae8acc744703
+ARG CLOWNMDSDK_COMMIT=a4a278dce25054edf0463166971662d368583584
 ARG GCC_VERSION=16.2.0
 ARG BLASTEM_COMMIT=ce5e85c3b219bfa58583391d9c95dc5256fd6c99
 
